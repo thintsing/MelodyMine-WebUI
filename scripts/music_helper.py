@@ -80,7 +80,7 @@ def _emit_json(payload):
 
 
 def _download_plan(
-    query, platform="auto", fmt="mp3", output=None, proxy=None, bitrate=None,
+    query, platform="auto", fmt="flac", output=None, proxy=None, bitrate=None,
     index=1, embed_thumbnail=True, no_metadata=False, cookies=None,
 ):
     """Build a side-effect-free execution plan for dry-run and JSON reporting."""
@@ -373,6 +373,125 @@ except Exception as e:
 """
 
 
+# ─── MusicBrainz Metadata Lookup (free, no auth, excellent for English songs) ─────
+
+_MB_SEARCH_SCRIPT = r"""
+import json, sys, urllib.request, urllib.parse, time
+
+query = sys.argv[1]
+limit = int(sys.argv[2]) if len(sys.argv) > 2 else 3
+
+UA = "MelodyMine/1.0 (music-downloader; +https://github.com/thintsing/MelodyMine)"
+time.sleep(0.5)
+
+mb_query = urllib.parse.quote(query)
+mb_url = f"https://musicbrainz.org/ws/2/recording/?query={mb_query}&limit={limit}&fmt=json"
+
+req = urllib.request.Request(mb_url)
+req.add_header("User-Agent", UA)
+try:
+    with urllib.request.urlopen(req, timeout=15) as resp:
+        data = json.loads(resp.read().decode("utf-8"))
+except Exception as e:
+    print(json.dumps({"error": str(e)}))
+    sys.exit(1)
+
+results = []
+for rec in data.get("recordings", []):
+    title = rec.get("title", "")
+    ac = rec.get("artist-credit", [])
+    artist = ac[0]["name"] if ac else ""
+    releases = rec.get("releases", [])
+    album = releases[0]["title"] if releases else ""
+    release_mbid = releases[0]["id"] if releases else ""
+    duration_ms = rec.get("length", 0)
+    pic_url = ""
+    if release_mbid:
+        time.sleep(0.3)
+        try:
+            ca_req = urllib.request.Request(
+                f"https://coverartarchive.org/release/{release_mbid}/front-500"
+            )
+            ca_req.add_header("User-Agent", UA)
+            with urllib.request.urlopen(ca_req, timeout=10) as ca_resp:
+                if ca_resp.status == 200:
+                    pic_url = ca_resp.url
+        except Exception:
+            try:
+                ca_req2 = urllib.request.Request(
+                    f"https://coverartarchive.org/release/{release_mbid}/front"
+                )
+                ca_req2.add_header("User-Agent", UA)
+                with urllib.request.urlopen(ca_req2, timeout=10) as ca_resp2:
+                    if ca_resp2.status == 200:
+                        pic_url = ca_resp2.url
+            except Exception:
+                pass
+    if title and artist:
+        results.append({
+            "title": title, "artist": artist, "album": album,
+            "duration": duration_ms, "pic_url": pic_url,
+        })
+print(json.dumps(results, ensure_ascii=False))
+"""
+
+
+def musicbrainz_lookup(query, python=None, limit=5):
+    """
+    Search MusicBrainz for song metadata (artist, album, cover art).
+    Free, no API key, no authentication needed.
+    Returns list of dicts: {title, artist, album, duration, pic_url}
+    """
+    if python is None:
+        python, _ = _find_music_python()
+    if not python:
+        return []
+    env = os.environ.copy()
+    env["PYTHONIOENCODING"] = "utf-8"
+    parts = query.strip().split(None, 1)
+    if len(parts) >= 2:
+        mb_query = f'artist:"{parts[0]}" AND recording:"{parts[1]}" AND NOT (cover OR remix OR karaoke OR live OR tribute OR instrumental OR edit)'
+    else:
+        mb_query = f'recording:"{parts[0]}" AND NOT (cover OR remix OR karaoke OR live OR tribute)'
+    try:
+        result = subprocess.run(
+            [python, "-c", _MB_SEARCH_SCRIPT, mb_query, str(limit)],
+            capture_output=True, text=True, timeout=30,
+            env=env, encoding="utf-8", errors="replace",
+        )
+    except Exception:
+        return []
+    stdout = result.stdout.strip()
+    if not stdout:
+        return []
+    try:
+        data = json.loads(stdout)
+    except json.JSONDecodeError:
+        return []
+    if isinstance(data, dict) and "error" in data:
+        return []
+    return data if isinstance(data, list) else []
+
+
+# Chinese text normalization for robust artist/title comparison
+_CHINESE_NORM_MAP = str.maketrans({
+    '倫': '伦', '傑': '杰', '樂': '乐', '國': '国', '雲': '云',
+    '會': '会', '個': '个', '時': '时', '間': '间', '說': '说',
+    '話': '话', '愛': '爱', '點': '点', '萬': '万', '龍': '龙',
+    '聲': '声', '體': '体', '學': '学', '問': '问', '車': '车',
+    '門': '门', '開': '开', '關': '关', '風': '风', '飛': '飞',
+    '馬': '马', '魚': '鱼', '鳥': '鸟', '與': '与', '從': '从',
+    '來': '来', '東': '东', '發': '发', '電': '电', '燈': '灯',
+    '當': '当', '後': '后', '書': '书', '長': '长', '見': '见',
+    '貝': '贝', '麵': '面',
+})
+
+
+def _norm_cn(s):
+    """Normalize Chinese text: map traditional → simplified for matching."""
+    return s.translate(_CHINESE_NORM_MAP) if s else s
+
+
 def _clean_artist(name):
     """Clean up artist name from API (remove trailing dashes, periods, etc.)."""
     if not name:
@@ -617,14 +736,13 @@ def set_metadata(filepath, title=None, artist=None, album=None, cover_path=None)
 
 def enhance_metadata(python, search_query, bili_title, output_dir):
     """
-    Post-download metadata enhancement (3-layer strategy).
+    Post-download metadata enhancement (multi-source strategy).
 
-    Layer 1: Parse user's search query (e.g. "周杰伦 稻香" -> artist=周杰伦, title=稻香)
-    Layer 2: NetEase Music API (best-effort album/cover lookup)
+    Layer 1: Parse user's search query
+    Layer 2a: MusicBrainz API (free, no auth)
+    Layer 2b: NetEase Music API (Chinese supplement)
     Layer 3: Parse Bilibili video title (fallback)
-
-    Then: set ID3 tags with ffmpeg + rename file to "Artist - Title.ext"
-
+    Results from MusicBrainz and NetEase are scored; the best wins.
     Never raises — metadata enhancement is best-effort.
     """
     filepath = find_downloaded_file(output_dir)
@@ -647,61 +765,95 @@ def enhance_metadata(python, search_query, bili_title, output_dir):
         print(f"  [!] Could not determine artist/title, keeping original tags")
         return
 
-    # ── Layer 2: NetEase Music API (best-effort album + cover) ──
-    album = ""
-    pic_url = ""
+    # ── Layer 2a: MusicBrainz ──
+    best_mb_score = -1
+    best_ne_score = -1
+    mb_data = None
+    ne_data = None
+
+    print(f"  Looking up album info on MusicBrainz: {search_query}")
+    mb_results = musicbrainz_lookup(search_query, python=python, limit=5)
+    if mb_results:
+        for r in mb_results:
+            r_artist = r.get("artist", "").strip()
+            r_title = r.get("title", "").strip()
+            score = 0
+            if _norm_cn(r_artist) == _norm_cn(artist):
+                score += 20
+            elif _norm_cn(artist) in _norm_cn(r_artist):
+                score += 8
+            if _norm_cn(r_title) == _norm_cn(title):
+                score += 5
+            elif _norm_cn(title) in _norm_cn(r_title) or _norm_cn(r_title) in _norm_cn(title):
+                score += 2
+            if score > best_mb_score:
+                best_mb_score = score
+                mb_data = r
+        if mb_data:
+            print(f"    Best: {mb_data['artist']} - {mb_data['title']} [MusicBrainz (score={best_mb_score})]")
+    else:
+        print(f"    No results from MusicBrainz")
+
+    # ── Layer 2b: NetEase Music API ──
     print(f"  Looking up album info on NetEase Music: {search_query}")
-    results = metadata_lookup(search_query, python=python, limit=10)
-    if results:
-        # Find best match: Prefer exact artist match (single-artist tracks)
-        # to avoid picking up covers/remixes with collaborators
+    ne_results = metadata_lookup(search_query, python=python, limit=10)
+    if ne_results:
         best = None
-        best_score = -1
-        for r in results:
+        for r in ne_results:
             r_artist_raw = r.get("artist", "")
             r_artist = _clean_artist(r_artist_raw)
             r_title = r.get("title", "").strip()
             is_collaboration = "," in r_artist_raw or "，" in r_artist_raw
-
-            # Score: exact solo artist match > collaboration > no match
             score = 0
-            if r_artist == artist and not is_collaboration:
-                score += 20  # exact solo artist match (likely original)
-            elif r_artist == artist and is_collaboration:
-                score += 5   # artist matches but it's a collab (likely cover)
-            elif artist in r_artist_raw:
-                score += 3   # partial match
-            if r_title == title:
-                score += 5   # exact title match
-            elif title in r_title or r_title in title:
-                score += 2   # partial title match
-
-            if score > best_score:
-                best_score = score
+            if _norm_cn(r_artist) == _norm_cn(artist) and not is_collaboration:
+                score += 20
+            elif _norm_cn(r_artist) == _norm_cn(artist) and is_collaboration:
+                score += 5
+            elif _norm_cn(artist) in _norm_cn(r_artist_raw):
+                score += 3
+            if _norm_cn(r_title) == _norm_cn(title):
+                score += 5
+            elif _norm_cn(title) in _norm_cn(r_title) or _norm_cn(r_title) in _norm_cn(title):
+                score += 2
+            if score > best_ne_score:
+                best_ne_score = score
                 best = r
-
         if best:
-            # Only use album from API if we have a high-confidence match
-            # (solo artist match = score >= 20, meaning not a collaboration)
-            if best_score >= 20:
-                album = best.get("album", "").strip()
-                pic_url = best.get("pic_url", "")
-                if album:
-                    print(f"  Album: {album} (high-confidence match)")
-                if pic_url:
-                    print(f"  Cover: available")
-                else:
-                    print(f"  Cover: not available (will keep Bilibili thumbnail)")
-            else:
-                print(f"  No original version found (all results are covers/remixes)")
-                print(f"  Album info skipped — title and artist will still be set")
-                pic_url = best.get("pic_url", "")  # still try cover
-        else:
-            print(f"  No suitable match found in NetEase results")
+            ne_data = best
+            print(f"    Best: {_clean_artist(best['artist'])} - {best['title']} [NetEase (score={best_ne_score})]")
     else:
-        print(f"  NetEase Music: no results (using parsed metadata only)")
+        print(f"    No results from NetEase")
 
-    # ── Layer 3: Download album cover ──
+    # Pick the winner
+    album = ""
+    pic_url = ""
+    source = "parsed query"
+    if mb_data and ne_data:
+        if best_mb_score >= best_ne_score:
+            pic_url = mb_data.get("pic_url", "")
+            album = mb_data.get("album", "").strip()
+            source = "MusicBrainz"
+        else:
+            pic_url = ne_data.get("pic_url", "")
+            album = ne_data.get("album", "").strip()
+            source = "NetEase"
+    elif mb_data:
+        pic_url = mb_data.get("pic_url", "")
+        album = mb_data.get("album", "").strip()
+        source = "MusicBrainz"
+    elif ne_data:
+        pic_url = ne_data.get("pic_url", "")
+        album = ne_data.get("album", "").strip()
+        source = "NetEase"
+
+    if album:
+        print(f"  Album: {album} (from {source})")
+    if pic_url:
+        print(f"  Cover: available (from {source})")
+    else:
+        print(f"  Cover: not available")
+
+    # ── Download album cover ──
     cover_path = None
     if pic_url:
         cover_path = download_cover(pic_url, python)
@@ -709,13 +861,7 @@ def enhance_metadata(python, search_query, bili_title, output_dir):
             print(f"  Downloaded album cover")
 
     # ── Set ID3 tags with ffmpeg ──
-    ok = set_metadata(
-        filepath,
-        title=title,
-        artist=artist,
-        album=album,
-        cover_path=cover_path,
-    )
+    ok = set_metadata(filepath, title=title, artist=artist, album=album, cover_path=cover_path)
     if ok:
         print(f"  [OK] Metadata embedded: {artist} - {title}" + (f" | {album}" if album else ""))
     else:
@@ -731,9 +877,8 @@ def enhance_metadata(python, search_query, bili_title, output_dir):
                 os.rename(filepath, new_path)
                 print(f"  Renamed: {os.path.basename(new_path)}")
             except Exception:
-                pass  # keep original name if rename fails
+                pass
 
-    # Cleanup cover temp file
     if cover_path and os.path.isfile(cover_path):
         try:
             os.remove(cover_path)
@@ -788,6 +933,116 @@ def _ytdlp_download(
     env["PYTHONIOENCODING"] = "utf-8"
 
     return run_streaming(cmd, env=env) == 0
+
+
+# ─── Bilibili API Direct Download (Tier 2: bypasses yt-dlp 412) ──────────
+
+def _bili_api_download(bvid, output, fmt="flac", bitrate=None, search_query="", python=None):
+    """Download audio directly from Bilibili's playurl API, bypassing yt-dlp entirely."""
+    if python is None:
+        python, _ = _find_music_python()
+    if not python:
+        return False
+    import urllib.request, urllib.error
+    print("    ↳ yt-dlp blocked (412) — trying Bilibili API direct download...")
+
+    # Step 1: Resolve aid + cid
+    view_url = f"https://api.bilibili.com/x/web-interface/view?bvid={bvid}"
+    view_req = urllib.request.Request(view_url)
+    view_req.add_header("User-Agent", BILI_UA)
+    try:
+        with urllib.request.urlopen(view_req, timeout=15) as resp:
+            vd = json.loads(resp.read().decode("utf-8"))["data"]
+            aid, cid = vd["aid"], vd["cid"]
+    except Exception as e:
+        print(f"    [!] Failed to get video info: {e}")
+        return False
+    print(f"    Resolved: aid={aid}, cid={cid}")
+
+    # Step 2: Get audio stream URL
+    playurl = f"https://api.bilibili.com/x/player/playurl?avid={aid}&cid={cid}&qn=16&fnver=0&fnval=4048&fourk=1"
+    play_req = urllib.request.Request(playurl)
+    play_req.add_header("User-Agent", BILI_UA)
+    play_req.add_header("Referer", "https://www.bilibili.com/")
+    try:
+        with urllib.request.urlopen(play_req, timeout=15) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+    except Exception as e:
+        print(f"    [!] Failed to get playurl: {e}")
+        return False
+    audio_streams = data.get("data", {}).get("dash", {}).get("audio", [])
+    if not audio_streams:
+        print("    [!] No audio streams")
+        return False
+    audio_url = audio_streams[0].get("baseUrl", "")
+    if not audio_url:
+        print("    [!] No baseUrl")
+        return False
+    print(f"    Audio stream found (codec: {audio_streams[0].get('codecs', '?')})")
+
+    # Step 3: Download
+    os.makedirs(output, exist_ok=True)
+    raw_path = os.path.join(output, f"_bili_raw_{aid}.m4a")
+    print("    Downloading audio stream...")
+    try:
+        dl_req = urllib.request.Request(audio_url)
+        dl_req.add_header("User-Agent", BILI_UA)
+        dl_req.add_header("Referer", "https://www.bilibili.com/")
+        with urllib.request.urlopen(dl_req, timeout=120) as resp:
+            with open(raw_path, "wb") as f:
+                while True:
+                    chunk = resp.read(65536)
+                    if not chunk:
+                        break
+                    f.write(chunk)
+    except Exception as e:
+        print(f"    [!] Download failed: {e}")
+        if os.path.isfile(raw_path): os.remove(raw_path)
+        return False
+    file_size_mb = os.path.getsize(raw_path) / (1024 * 1024)
+    print(f"    Downloaded: {file_size_mb:.1f} MB")
+    if file_size_mb < 0.1:
+        os.remove(raw_path)
+        return False
+
+    # Step 4: Convert
+    ffmpeg_exe = find_ffmpeg(python)
+    if not ffmpeg_exe or fmt == "m4a":
+        final = os.path.join(output, f"bilibili_audio_{aid}.m4a")
+        if raw_path != final: os.rename(raw_path, final)
+        print(f"    Saved: {final}")
+        return True
+
+    print(f"    Converting to {fmt}...")
+    final_path = os.path.join(output, f"bilibili_audio_{aid}.{fmt}")
+    convert_cmd = [ffmpeg_exe, "-y", "-i", raw_path]
+    if fmt == "mp3":
+        convert_cmd.extend(["-codec:a", "libmp3lame"])
+        convert_cmd.extend(["-qscale:a", "2"] if not bitrate else ["-b:a", str(bitrate)])
+    elif fmt == "flac":
+        convert_cmd.extend(["-codec:a", "flac"])
+    elif fmt == "opus":
+        convert_cmd.extend(["-codec:a", "libopus"])
+    elif fmt == "vorbis":
+        convert_cmd.extend(["-codec:a", "libvorbis"])
+    elif fmt == "wav":
+        convert_cmd.extend(["-codec:a", "pcm_s16le"])
+    else:
+        convert_cmd.extend(["-codec:a", "libmp3lame", "-qscale:a", "2"])
+    convert_cmd.append(final_path)
+    try:
+        result = subprocess.run(convert_cmd, capture_output=True, text=True, timeout=180, encoding="utf-8", errors="replace")
+        if result.returncode != 0:
+            print(f"    [!] FFmpeg failed: {result.stderr[:200]}")
+            return False
+    except Exception as e:
+        print(f"    [!] FFmpeg error: {e}")
+        return False
+    finally:
+        if os.path.isfile(raw_path): os.remove(raw_path)
+
+    print(f"    Converted: {os.path.getsize(final_path) / (1024 * 1024):.1f} MB ({fmt.upper()})")
+    return True
 
 
 # ─── Commands ────────────────────────────────────────────────────────────
@@ -980,7 +1235,7 @@ def cmd_search(query, platform="auto", limit=5, proxy=None):
 
 
 def cmd_download(
-    query, platform="auto", fmt="mp3", output=None,
+    query, platform="auto", fmt="flac", output=None,
     proxy=None, bitrate=None, index=1, embed_thumbnail=True,
     no_metadata=False, cookies=None, dry_run=False, json_output=False,
 ):
@@ -1066,9 +1321,26 @@ def cmd_download(
                 "fallback": False,
             }
 
-        # Bilibili download failed → try YouTube fallback
-        print(f"\n  Bilibili download failed.")
-        print("  Falling back to YouTube...")
+        # Tier 2: Bilibili API direct download
+        print(f"\n  yt-dlp download failed (likely 412 Precondition Failed).")
+        ok_api = _bili_api_download(
+            item["bvid"], output, fmt, bitrate,
+            search_query=query, python=py,
+        )
+        if ok_api:
+            if not no_metadata:
+                enhance_metadata(py, query, item["title"], output)
+            print(f"\n[OK] Download complete (via Bilibili API direct)!")
+            print(f"     Files saved to: {output}")
+            return {
+                "ok": True, "platform": "bilibili", "engine": "bili-api-direct",
+                "query": query, "source_url": f"https://www.bilibili.com/video/{item['bvid']}",
+                "format": fmt, "output": output,
+                "metadata": not no_metadata, "fallback": "bili-api-direct",
+            }
+
+        # Tier 3: YouTube fallback
+        print(f"\n  Bilibili all tiers failed. Falling back to YouTube...")
         return _do_youtube_download(
             py, query, output, fmt, proxy, bitrate, index, embed_thumbnail,
             no_metadata=no_metadata, cookies=cookies,
@@ -1251,7 +1523,7 @@ Examples:
     p_dl = sub.add_parser("download", help="Download a song")
     p_dl.add_argument("query", help="Song name, artist, Spotify URL, or search query")
     p_dl.add_argument("--platform", default="auto", choices=["auto", "bilibili", "youtube"])
-    p_dl.add_argument("--format", default="mp3", choices=["mp3", "flac", "m4a", "opus", "wav", "vorbis"])
+    p_dl.add_argument("--format", default="flac", choices=["mp3", "flac", "m4a", "opus", "wav", "vorbis"])
     p_dl.add_argument("--output", default=None, help="Output dir (default: ~/Music/MelodyMine)")
     p_dl.add_argument("--proxy", default=None, help="Proxy for YouTube (e.g. socks5://host:port)")
     p_dl.add_argument("--cookies", default=None, help="cookies.txt path for YouTube sign-in/bot checks")
