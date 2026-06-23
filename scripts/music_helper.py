@@ -7,11 +7,11 @@ YouTube:  yt-dlp search + download (proxy optional, needed in China)
 spotDL:   Spotify URL pipeline (optional, has known bugs)
 
 Usage:
-    python music_helper.py check
-    python music_helper.py search "周杰伦 稻香"
-    python music_helper.py download "周杰伦 稻香"
-    python music_helper.py download "The Weeknd Blinding Lights" --proxy socks5://host:port
-    python music_helper.py download "https://open.spotify.com/track/xxx"
+    python scripts/music_helper.py check
+    python scripts/music_helper.py search "周杰伦 稻香"
+    python scripts/music_helper.py download "周杰伦 稻香"
+    python scripts/music_helper.py download "The Weeknd Blinding Lights" --proxy socks5://host:port
+    python scripts/music_helper.py download "https://open.spotify.com/track/xxx"
 """
 
 import argparse
@@ -1136,7 +1136,7 @@ def cmd_setup():
     print("[4/4] Setup complete!")
     print()
     print("  You can now download music:")
-    print(f'    python music_helper.py download "周杰伦 稻香"')
+    print(f'    python scripts/music_helper.py download "周杰伦 稻香"')
     print()
     print("  Platform availability:")
     has_yt = _check_module(working_py, "yt_dlp")
@@ -1168,7 +1168,7 @@ def cmd_check():
         print(f"  [OK]   yt-dlp:        v{ytdlp_ver}")
     else:
         print("  [FAIL] No Python with yt-dlp found")
-        print("         Run: python music_helper.py setup")
+        print("         Run: python scripts/music_helper.py setup")
         return False
 
     if ff:
@@ -1210,7 +1210,7 @@ def cmd_search(query, platform="auto", limit=5, proxy=None):
     py, _, _ = ensure_deps()
     if not py:
         print("ERROR: No Python with yt-dlp found. Run 'setup' first:")
-        print("  python music_helper.py setup")
+        print("  python scripts/music_helper.py setup")
         sys.exit(1)
 
     if platform == "auto":
@@ -1278,7 +1278,7 @@ def cmd_download(
     py, _, _ = ensure_deps()
     if not py:
         print("ERROR: No Python with yt-dlp found. Run 'setup' first:")
-        print("  python music_helper.py setup")
+        print("  python scripts/music_helper.py setup")
         sys.exit(1)
 
     # ── Spotify URL → spotDL ──
