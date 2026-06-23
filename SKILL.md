@@ -117,6 +117,8 @@ python scripts/music_helper.py download "Artist Song" --cookies "/path/to/cookie
 - `--index N`: 1-based search result index.
 - `--no-thumbnail`: skip cover embedding.
 - `--no-metadata`: skip NetEase lookup, ID3 cleanup, and file rename.
+- `--dry-run`: print the command that would run without executing.
+- `--json`: output machine-readable JSON (use with `--dry-run` or after a successful download).
 
 ## Platform Behavior
 

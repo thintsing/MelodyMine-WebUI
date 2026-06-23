@@ -1,0 +1,477 @@
+#!/usr/bin/env python3
+"""MelodyMine shared infrastructure.
+
+Centralizes cross-cutting concerns used by both ``music_helper.py`` and
+``spotify_helper.py``:
+
+- Platform / constant definitions
+- Default output directory selection
+- Python interpreter discovery (with auto-install + venv fallback)
+- pip install (PEP 668 aware)
+- ffmpeg detection (system PATH + imageio-ffmpeg bundle)
+- Proxy URL helpers (SOCKS5 aware)
+- Language / Spotify-URL detection
+- Filename sanitization
+
+Importing this module keeps both helpers in sync and avoids divergent
+venv paths or duplicated dependency-install logic.
+"""
+
+import glob
+import os
+import re
+import shutil
+import subprocess
+import sys
+
+# ─── Platform / Constants ────────────────────────────────────────────────
+
+HOME = os.path.expanduser("~")
+IS_WIN = sys.platform == "win32"
+IS_MAC = sys.platform == "darwin"
+IS_LINUX = sys.platform.startswith("linux")
+
+BILI_UA = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) "
+    "Chrome/125.0.0.0 Safari/537.36"
+)
+
+PROXY_PLATFORMS = {"youtube", "soundcloud", "niconico", "vimeo"}
+
+SPOTIFY_RE = re.compile(
+    r"https?://(?:open\.spotify\.com|spotify\.link)/(?:track|album|playlist|artist)/"
+)
+
+# Unified venv path shared by both helpers so dependencies are installed once.
+VENV_DIR = os.path.join(HOME, ".cache", "melodymine-venv")
+
+
+def _get_default_output():
+    """Pick a sensible default output directory that exists on this platform."""
+    for candidate in [
+        os.path.join(HOME, "Music", "MelodyMine"),     # Windows / macOS
+        os.path.join(HOME, "Downloads", "music"),      # Linux desktop
+        os.path.join(HOME, "music"),                   # Lowercase fallback
+        os.path.join(HOME, "MelodyMine-downloads"),    # Last resort
+    ]:
+        parent = os.path.dirname(candidate)
+        if os.path.isdir(parent):
+            return candidate
+    return os.path.join(HOME, "Music", "MelodyMine")
+
+
+DEFAULT_OUTPUT = _get_default_output()
+
+
+# ─── Python / Dependency Discovery ───────────────────────────────────────
+
+# Per-required-module cache: module_name -> (python_path, version)
+_PYTHON_CACHE = {}
+_CACHED_FFMPEG = None
+
+
+def _collect_python_candidates():
+    """Build an exhaustive list of Python interpreters to try."""
+    candidates = []
+
+    # 1. Unified MelodyMine venv (if it exists)
+    if IS_WIN:
+        candidates.append(os.path.join(VENV_DIR, "Scripts", "python.exe"))
+    else:
+        candidates.append(os.path.join(VENV_DIR, "bin", "python"))
+
+    # 2. WorkBuddy venv (any version — don't hardcode)
+    wb_base = os.path.join(HOME, ".workbuddy", "binaries", "python")
+    if IS_WIN:
+        candidates.append(os.path.join(wb_base, "envs", "default", "Scripts", "python.exe"))
+    else:
+        candidates.append(os.path.join(wb_base, "envs", "default", "bin", "python"))
+    wb_versions = os.path.join(wb_base, "versions")
+    if os.path.isdir(wb_versions):
+        for v in sorted(os.listdir(wb_versions), reverse=True):
+            if IS_WIN:
+                candidates.append(os.path.join(wb_versions, v, "python.exe"))
+            else:
+                candidates.append(os.path.join(wb_versions, v, "bin", "python"))
+
+    # 3. Hermes Agent bundled runtime (uv-managed Python 3.11)
+    #    Windows: %LOCALAPPDATA%\hermes ; Unix: ~/.hermes (or $HERMES_HOME)
+    hermes_home = os.environ.get("HERMES_HOME") or (
+        os.path.join(os.environ.get("LOCALAPPDATA", ""), "hermes") if IS_WIN
+        else os.path.join(HOME, ".hermes")
+    )
+    if IS_WIN:
+        candidates.append(os.path.join(hermes_home, "bin", "python.exe"))
+    else:
+        candidates.append(os.path.join(hermes_home, "bin", "python3"))
+
+    # 4. uv-managed CPython (used by Hermes and standalone uv installs)
+    #    Win: %APPDATA%\uv\data\python\cpython-3.1*\python.exe
+    #    Unix: ~/.local/share/uv/python/cpython-3.1*/bin/python3
+    uv_py_root = (
+        os.path.join(os.environ.get("APPDATA", ""), "uv", "data", "python")
+        if IS_WIN else os.path.join(HOME, ".local", "share", "uv", "python")
+    )
+    if os.path.isdir(uv_py_root):
+        for v in sorted(os.listdir(uv_py_root), reverse=True):
+            if not v.startswith("cpython-3.1"):
+                continue
+            if IS_WIN:
+                candidates.append(os.path.join(uv_py_root, v, "python.exe"))
+            else:
+                candidates.append(os.path.join(uv_py_root, v, "bin", "python3"))
+
+    # 5. Current interpreter (whatever ran this script)
+    candidates.append(sys.executable)
+
+    # 6. python3 / python / py on PATH
+    for name in ["python3", "python", "py"]:
+        path = shutil.which(name)
+        if path:
+            candidates.append(path)
+
+    # 7. Common Windows install locations
+    if IS_WIN:
+        local_app = os.environ.get("LOCALAPPDATA", "")
+        prog_files = os.environ.get("ProgramFiles", "C:\\Program Files")
+        for ver in ["3.13", "3.12", "3.11", "3.10"]:
+            v = ver.replace(".", "")
+            candidates.append(f"{local_app}\\Programs\\Python\\Python{v}\\python.exe")
+            candidates.append(f"{prog_files}\\Python{v}\\python.exe")
+            candidates.append(f"C:\\Python{v}\\python.exe")
+
+    # 8. macOS / Linux common paths
+    if not IS_WIN:
+        for path in ["/usr/bin/python3", "/usr/local/bin/python3",
+                     "/opt/homebrew/bin/python3", "/usr/bin/python"]:
+            candidates.append(path)
+
+        # pyenv shims + version dirs
+        pyenv_root = os.environ.get("PYENV_ROOT", os.path.join(HOME, ".pyenv"))
+        candidates.append(os.path.join(pyenv_root, "shims", "python3"))
+        versions_dir = os.path.join(pyenv_root, "versions")
+        if os.path.isdir(versions_dir):
+            for v in sorted(os.listdir(versions_dir), reverse=True):
+                candidates.append(os.path.join(versions_dir, v, "bin", "python3"))
+
+        # conda / miniconda / anaconda / miniforge
+        for conda_base in [
+            os.path.join(HOME, "miniconda3"),
+            os.path.join(HOME, "anaconda3"),
+            os.path.join(HOME, "miniforge3"),
+            "/opt/conda",
+        ]:
+            candidates.append(os.path.join(conda_base, "bin", "python3"))
+            envs_dir = os.path.join(conda_base, "envs")
+            if os.path.isdir(envs_dir):
+                for env_name in sorted(os.listdir(envs_dir)):
+                    candidates.append(os.path.join(envs_dir, env_name, "bin", "python3"))
+
+        # asdf
+        asdf_dir = os.path.join(HOME, ".asdf")
+        if os.path.isdir(asdf_dir):
+            for py_ver_dir in glob.glob(os.path.join(asdf_dir, "installs", "python", "*")):
+                candidates.append(os.path.join(py_ver_dir, "bin", "python3"))
+
+        # pip --user installs location
+        candidates.append(os.path.join(HOME, ".local", "bin", "python3"))
+
+    # 9. macOS framework Python (python.org installer)
+    if IS_MAC:
+        fw_base = "/Library/Frameworks/Python.framework/Versions"
+        if os.path.isdir(fw_base):
+            for v in sorted(os.listdir(fw_base), reverse=True):
+                candidates.append(os.path.join(fw_base, v, "bin", "python3"))
+
+    # Deduplicate while preserving order
+    seen = set()
+    unique = []
+    for c in candidates:
+        rp = os.path.realpath(c) if c else ""
+        if c and rp not in seen:
+            seen.add(rp)
+            unique.append(c)
+    return unique
+
+
+def check_module(python, module_name, timeout=10):
+    """Check if a Python has a module installed. Returns version string or None."""
+    # yt_dlp stores version in yt_dlp.version.__version__, not top-level
+    version_expr = {
+        "yt_dlp": "yt_dlp.version.__version__",
+    }.get(module_name, f"getattr({module_name}, '__version__', 'ok')")
+    try:
+        result = subprocess.run(
+            [python, "-c", f"import {module_name}; print({version_expr})"],
+            capture_output=True, text=True, timeout=timeout,
+            encoding="utf-8", errors="replace",
+        )
+        if result.returncode == 0:
+            return result.stdout.strip()
+    except Exception:
+        pass
+    return None
+
+
+def pip_install(python, packages, timeout=180):
+    """Install pip packages. Handles PEP 668 (externally-managed-environment).
+
+    Strategy: regular install -> --user -> report failure (caller may create venv).
+    Returns True on success.
+    """
+    if not packages:
+        return True
+
+    base_cmd = [python, "-m", "pip", "install", "--quiet", "--disable-pip-version-check"]
+
+    # Attempt 1: regular install
+    try:
+        result = subprocess.run(
+            base_cmd + packages,
+            capture_output=True, text=True, timeout=timeout,
+            encoding="utf-8", errors="replace",
+        )
+        if result.returncode == 0:
+            return True
+        if "externally-managed-environment" not in (result.stderr or "").lower():
+            return False
+    except Exception:
+        return False
+
+    # Attempt 2: --user install (bypasses PEP 668 for user site-packages)
+    try:
+        result = subprocess.run(
+            base_cmd + ["--user"] + packages,
+            capture_output=True, text=True, timeout=timeout,
+            encoding="utf-8", errors="replace",
+        )
+        if result.returncode == 0:
+            return True
+    except Exception:
+        pass
+
+    return False
+
+
+def _create_venv(base_python, install_packages, verify_module="yt_dlp", timeout=120):
+    """Create the unified virtual environment and install all deps.
+
+    Returns (venv_python, verify_module_version) or (None, None).
+    """
+    if IS_WIN:
+        venv_py = os.path.join(VENV_DIR, "Scripts", "python.exe")
+    else:
+        venv_py = os.path.join(VENV_DIR, "bin", "python")
+
+    if not os.path.isfile(venv_py):
+        print(f"  Creating virtual environment at {VENV_DIR}...")
+        try:
+            result = subprocess.run(
+                [base_python, "-m", "venv", VENV_DIR],
+                capture_output=True, text=True, timeout=timeout,
+                encoding="utf-8", errors="replace",
+            )
+            if result.returncode != 0:
+                print(f"  [!] venv creation failed: {(result.stderr or '')[:200]}")
+                return None, None
+        except Exception as e:
+            print(f"  [!] venv creation error: {e}")
+            return None, None
+
+    print(f"  Installing packages into venv...")
+    pip_install(venv_py, install_packages)
+
+    ver = check_module(venv_py, verify_module)
+    if ver:
+        return venv_py, ver
+    return None, None
+
+
+def detect_python_with(required_module):
+    """Detect a Python that has ``required_module`` installed, WITHOUT auto-installing.
+
+    Returns (path, version) or (None, None). Use for read-only checks (e.g.
+    ``check`` commands) where installation side-effects are undesirable.
+    """
+    for py in _collect_python_candidates():
+        if not py or not os.path.isfile(py):
+            continue
+        ver = check_module(py, required_module)
+        if ver:
+            return py, ver
+    return None, None
+
+
+def find_python(required_module, install_packages):
+    """Find a Python interpreter with ``required_module`` installed.
+
+    Auto-installs ``install_packages`` if not present. Creates the unified
+    venv as a last resort (handles PEP 668 externally-managed environments).
+
+    Returns (path, version) or (None, None).
+    """
+    if required_module in _PYTHON_CACHE:
+        return _PYTHON_CACHE[required_module]
+
+    candidates = _collect_python_candidates()
+
+    # Phase 1: find a Python that already has the required module
+    for py in candidates:
+        if not py or not os.path.isfile(py):
+            continue
+        ver = check_module(py, required_module)
+        if ver:
+            _PYTHON_CACHE[required_module] = (py, ver)
+            return py, ver
+
+    # Phase 2: find any working Python and auto-install deps
+    for py in candidates:
+        if not py or not os.path.isfile(py):
+            continue
+        pip_check = subprocess.run(
+            [py, "-m", "pip", "--version"],
+            capture_output=True, text=True, timeout=10,
+            encoding="utf-8", errors="replace",
+        )
+        if pip_check.returncode != 0:
+            continue
+
+        print(f"  Auto-installing: {', '.join(install_packages)}")
+        print(f"  Using: {py}")
+        pip_install(py, install_packages)
+
+        ver = check_module(py, required_module)
+        if ver:
+            _PYTHON_CACHE[required_module] = (py, ver)
+            return py, ver
+
+    # Phase 3: system Python is externally-managed (PEP 668) -> create venv
+    for py in candidates:
+        if not py or not os.path.isfile(py):
+            continue
+        ver_check = subprocess.run(
+            [py, "--version"], capture_output=True, text=True, timeout=5,
+            encoding="utf-8", errors="replace",
+        )
+        if ver_check.returncode == 0:
+            print(f"  System Python is externally-managed, creating isolated venv...")
+            venv_py, venv_ver = _create_venv(
+                py, install_packages, verify_module=required_module,
+            )
+            if venv_py:
+                _PYTHON_CACHE[required_module] = (venv_py, venv_ver)
+                return venv_py, venv_ver
+            break  # don't try more candidates if venv creation failed
+
+    return None, None
+
+
+def find_ffmpeg(python=None):
+    """Find ffmpeg executable.
+
+    Strategy: system PATH -> imageio-ffmpeg (auto-installed pip package with
+    bundled binary). Returns the ffmpeg command/path, or None.
+    """
+    global _CACHED_FFMPEG
+    if _CACHED_FFMPEG:
+        return _CACHED_FFMPEG
+
+    # 1. Try system ffmpeg on PATH
+    for exe in ["ffmpeg", "ffmpeg.exe"]:
+        try:
+            result = subprocess.run(
+                [exe, "-version"],
+                capture_output=True, text=True, timeout=5,
+                encoding="utf-8", errors="replace",
+            )
+            if result.returncode == 0:
+                _CACHED_FFMPEG = exe
+                return exe
+        except Exception:
+            pass
+
+    # 2. Try imageio-ffmpeg (bundled static ffmpeg binary)
+    if python is None:
+        python, _ = find_python("yt_dlp", ["yt-dlp", "requests", "pysocks", "imageio-ffmpeg"])
+    if python:
+        if not check_module(python, "imageio_ffmpeg"):
+            print("  Auto-installing: imageio-ffmpeg (bundled ffmpeg binary)")
+            pip_install(python, ["imageio-ffmpeg"])
+        try:
+            result = subprocess.run(
+                [python, "-c", "import imageio_ffmpeg; print(imageio_ffmpeg.get_ffmpeg_exe())"],
+                capture_output=True, text=True, timeout=15,
+                encoding="utf-8", errors="replace",
+            )
+            if result.returncode == 0:
+                path = result.stdout.strip()
+                if path and os.path.isfile(path):
+                    _CACHED_FFMPEG = path
+                    return path
+        except Exception:
+            pass
+
+    return None
+
+
+# ─── Proxy helpers ───────────────────────────────────────────────────────
+
+def is_socks_proxy(proxy_url):
+    """Check if proxy URL is a SOCKS proxy."""
+    return bool(proxy_url) and proxy_url.startswith(
+        ("socks5://", "socks5h://", "socks4://")
+    )
+
+
+def proxy_to_env(proxy_url):
+    """Convert proxy URL to environment variables for Python requests."""
+    if is_socks_proxy(proxy_url):
+        return {"ALL_PROXY": proxy_url}
+    return {"HTTP_PROXY": proxy_url, "HTTPS_PROXY": proxy_url}
+
+
+# ─── Language / URL detection ────────────────────────────────────────────
+
+def is_chinese(text):
+    for ch in text:
+        if "\u4e00" <= ch <= "\u9fff":
+            return True
+    return False
+
+
+def auto_select_platform(query):
+    """Pick the default platform based on query language."""
+    return "bilibili" if is_chinese(query) else "youtube"
+
+
+def needs_proxy(platform):
+    return platform in PROXY_PLATFORMS
+
+
+def is_spotify_url(text):
+    return bool(SPOTIFY_RE.search(text))
+
+
+# ─── Misc ────────────────────────────────────────────────────────────────
+
+def sanitize_filename(name):
+    """Sanitize a string for use as a filename (cross-platform safe)."""
+    name = re.sub(r'[<>:"/\\|?*]', "", name)
+    name = re.sub(r"\s+", " ", name).strip()
+    return name
+
+
+def run_streaming(cmd, env=None):
+    """Run a subprocess, streaming combined stdout+stderr to print in real time.
+
+    Returns the exit code.
+    """
+    proc = subprocess.Popen(
+        cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+        env=env, encoding="utf-8", errors="replace",
+    )
+    for line in proc.stdout:
+        print(line, end="")
+    proc.wait()
+    return proc.returncode

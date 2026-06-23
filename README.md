@@ -100,6 +100,8 @@ Options:
   --index N                           1-based search result index
   --no-thumbnail
   --no-metadata
+  --dry-run                           Preview command without executing
+  --json                              Machine-readable JSON output
 ```
 
 ## Platform Routing
@@ -130,9 +132,11 @@ Copy this folder to your assistant's skills directory:
 | Platform | Example path |
 | --- | --- |
 | WorkBuddy | `~/.workbuddy/skills/melodymine/` |
-| OpenClaw | `~/.openclaw/skills/melodymine/` |
+| OpenClaw | `~/.openclaw/workspace/skills/melodymine/` |
 | Hermes | `~/.hermes/skills/melodymine/` |
 | Custom | Any directory your assistant scans for file-based skills |
+
+> Runtime note: WorkBuddy and Hermes ship a bundled Python that MelodyMine auto-detects on first run. OpenClaw runs on Node.js and does **not** bundle Python, so OpenClaw users must install Python 3.10+ from python.org before first use — `setup` will then locate it.
 
 Then restart the assistant and ask naturally:
 
@@ -162,6 +166,7 @@ MelodyMine/
 ├── SKILL.md
 ├── README.md
 ├── scripts/
+│   ├── melodymine_common.py   # Shared infra: Python/venv/pip/ffmpeg/proxy detection
 │   ├── music_helper.py       # Main setup/search/download helper
 │   ├── spotify_helper.py     # Advanced spotDL operations
 │   └── requirements.txt

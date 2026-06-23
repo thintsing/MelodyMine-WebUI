@@ -2,7 +2,7 @@
 """MelodyMine Spotify helper - Advanced spotDL operations.
 
 Orchestrates the Spotify -> YouTube -> ffmpeg pipeline with:
-  - Auto Python/spotdl path detection
+  - Auto Python/spotdl path detection (shared with music_helper via melodymine_common)
   - SOCKS5 proxy support via --yt-dlp-args (bypasses spotDL's HTTP-only proxy check)
   - Spotify search to resolve Chinese song names to URLs
   - Real-time streaming output
@@ -30,232 +30,36 @@ Usage:
 import argparse
 import json
 import os
-import shutil
 import subprocess
 import sys
 
+from melodymine_common import (
+    DEFAULT_OUTPUT,
+    detect_python_with,
+    find_python,
+    is_socks_proxy,
+    pip_install,
+    proxy_to_env,
+    run_streaming,
+)
+
 
 # --- Configuration ---
-HOME = os.path.expanduser("~")
-IS_WIN = sys.platform == "win32"
-DEFAULT_PROXY = None  # User must provide via --proxy
 
+# User must provide a proxy via --proxy; no implicit default.
+DEFAULT_PROXY = None
 
-def _get_default_output():
-    """Pick a sensible default output directory that exists on this platform."""
-    for candidate in [
-        os.path.join(HOME, "Music", "MelodyMine"),
-        os.path.join(HOME, "Downloads", "music"),
-        os.path.join(HOME, "music"),
-        os.path.join(HOME, "MelodyMine-downloads"),
-    ]:
-        if os.path.isdir(os.path.dirname(candidate)):
-            return candidate
-    return os.path.join(HOME, "Music", "MelodyMine")
-
-
-DEFAULT_OUTPUT = _get_default_output()
-
-# Dedicated venv for spotDL (created on demand when system Python is externally managed)
-_SPOTDL_VENV_DIR = os.path.join(HOME, ".cache", "melodymine-spotdl-venv")
-
-
-def _is_socks_proxy(proxy_url):
-    """Check if proxy URL is a SOCKS proxy."""
-    return proxy_url and proxy_url.startswith(("socks5://", "socks5h://", "socks4://"))
-
-
-def _proxy_to_env(proxy_url):
-    """Convert proxy URL to environment variable format for Python requests."""
-    if _is_socks_proxy(proxy_url):
-        return {"ALL_PROXY": proxy_url}
-    else:
-        return {"HTTP_PROXY": proxy_url, "HTTPS_PROXY": proxy_url}
-
-
-def _collect_python_candidates():
-    """Build an exhaustive list of Python interpreters to try."""
-    candidates = []
-
-    # 1. Dedicated venv (if it exists)
-    if IS_WIN:
-        candidates.append(os.path.join(_SPOTDL_VENV_DIR, "Scripts", "python.exe"))
-    else:
-        candidates.append(os.path.join(_SPOTDL_VENV_DIR, "bin", "python"))
-
-    # 2. Current interpreter
-    candidates.append(sys.executable)
-
-    # 3. python3 / python / py on PATH
-    for name in ["python3", "python", "py"]:
-        path = shutil.which(name)
-        if path:
-            candidates.append(path)
-
-    # 4. WorkBuddy venv (any version)
-    wb_venv = os.path.join(HOME, ".workbuddy", "binaries", "python", "envs", "default")
-    if IS_WIN:
-        candidates.append(os.path.join(wb_venv, "Scripts", "python.exe"))
-    else:
-        candidates.append(os.path.join(wb_venv, "bin", "python"))
-
-    # 5. Common platform paths
-    if not IS_WIN:
-        for path in ["/usr/bin/python3", "/usr/local/bin/python3",
-                      "/opt/homebrew/bin/python3"]:
-            candidates.append(path)
-        # pyenv
-        pyenv_root = os.environ.get("PYENV_ROOT", os.path.join(HOME, ".pyenv"))
-        candidates.append(os.path.join(pyenv_root, "shims", "python3"))
-        # conda
-        for conda_base in [os.path.join(HOME, "miniconda3"),
-                           os.path.join(HOME, "anaconda3"),
-                           "/opt/conda"]:
-            candidates.append(os.path.join(conda_base, "bin", "python3"))
-        # pip --user
-        candidates.append(os.path.join(HOME, ".local", "bin", "python3"))
-
-    if IS_WIN:
-        local_app = os.environ.get("LOCALAPPDATA", "")
-        for ver in ["3.13", "3.12", "3.11", "3.10"]:
-            v = ver.replace(".", "")
-            candidates.append(f"{local_app}\\Programs\\Python\\Python{v}\\python.exe")
-
-    # Deduplicate
-    seen = set()
-    unique = []
-    for c in candidates:
-        rp = os.path.realpath(c) if c else ""
-        if c and rp not in seen:
-            seen.add(rp)
-            unique.append(c)
-    return unique
-
-
-def _pip_install(python, packages, timeout=180):
-    """Install pip packages. Handles PEP 668 (externally-managed-environment)."""
-    if not packages:
-        return True
-    base_cmd = [python, "-m", "pip", "install", "--quiet", "--disable-pip-version-check"]
-    try:
-        result = subprocess.run(
-            base_cmd + packages,
-            capture_output=True, text=True, timeout=timeout,
-            encoding="utf-8", errors="replace",
-        )
-        if result.returncode == 0:
-            return True
-        if "externally-managed-environment" not in (result.stderr or "").lower():
-            return False
-    except Exception:
-        return False
-    # PEP 668: try --user
-    try:
-        result = subprocess.run(
-            base_cmd + ["--user"] + packages,
-            capture_output=True, text=True, timeout=timeout,
-            encoding="utf-8", errors="replace",
-        )
-        return result.returncode == 0
-    except Exception:
-        return False
-
-
-def _find_python_with_spotdl():
-    """Find a Python that can import spotdl."""
-    for py in _collect_python_candidates():
-        if not py or not os.path.isfile(py):
-            continue
-        try:
-            result = subprocess.run(
-                [py, "-c", "import spotdl; print(spotdl.__version__)"],
-                capture_output=True, text=True, timeout=10,
-                encoding="utf-8", errors="replace",
-            )
-            if result.returncode == 0:
-                return py
-        except Exception:
-            continue
-    return None
-
-
-def _ensure_spotdl_installed():
-    """Install spotdl + PySocks into a Python environment.
-    Handles PEP 668 by creating a venv if system Python is externally-managed.
-    """
-    # Try installing into existing Python candidates first
-    for py in _collect_python_candidates():
-        if not py or not os.path.isfile(py):
-            continue
-        # Check pip works
-        pip_check = subprocess.run(
-            [py, "-m", "pip", "--version"],
-            capture_output=True, text=True, timeout=10,
-            encoding="utf-8", errors="replace",
-        )
-        if pip_check.returncode != 0:
-            continue
-
-        print(f"[INSTALL] Installing spotdl + PySocks into {py}...")
-        _pip_install(py, ["spotdl", "PySocks"])
-
-        # Verify
-        try:
-            result = subprocess.run(
-                [py, "-c", "import spotdl; print('ok')"],
-                capture_output=True, text=True, timeout=10,
-                encoding="utf-8", errors="replace",
-            )
-            if result.returncode == 0:
-                print(f"[INSTALL] spotdl ready, python: {py}")
-                return py
-        except Exception:
-            continue
-
-    # Fallback: create a dedicated venv
-    print("[INSTALL] System Python is externally-managed, creating isolated venv...")
-    venv_py = os.path.join(
-        _SPOTDL_VENV_DIR,
-        "Scripts", "python.exe" if IS_WIN else "bin", "python",
-    )
-    if not os.path.isfile(venv_py):
-        # Find any Python to create the venv
-        for py in _collect_python_candidates():
-            if not py or not os.path.isfile(py):
-                continue
-            result = subprocess.run(
-                [py, "-m", "venv", _SPOTDL_VENV_DIR],
-                capture_output=True, text=True, timeout=60,
-                encoding="utf-8", errors="replace",
-            )
-            if result.returncode == 0:
-                break
-        else:
-            print("ERROR: Could not create venv. Install Python 3.10+ first.")
-            sys.exit(1)
-
-    _pip_install(venv_py, ["spotdl", "PySocks"])
-    try:
-        result = subprocess.run(
-            [venv_py, "-c", "import spotdl; print('ok')"],
-            capture_output=True, text=True, timeout=10,
-            encoding="utf-8", errors="replace",
-        )
-        if result.returncode == 0:
-            print(f"[INSTALL] spotdl ready (venv), python: {venv_py}")
-            return venv_py
-    except Exception:
-        pass
-
-    print("ERROR: spotdl installation failed")
-    sys.exit(1)
+# Packages installed when bootstrapping spotDL.
+SPOTDL_PACKAGES = ["spotdl", "PySocks"]
 
 
 def _get_python():
     """Get a working python with spotdl, auto-install if missing."""
-    py = _find_python_with_spotdl()
-    if py is None:
-        py = _ensure_spotdl_installed()
+    py, _ = find_python("spotdl", SPOTDL_PACKAGES)
+    if not py:
+        print("ERROR: spotdl installation failed.")
+        print("       Try manually: pip install spotdl PySocks")
+        sys.exit(1)
     return py
 
 
@@ -270,7 +74,8 @@ def spotify_search(query, proxy=None):
     # Build environment with proxy
     env = os.environ.copy()
     if proxy:
-        env.update(_proxy_to_env(proxy))
+        env.update(proxy_to_env(proxy))
+    env["PYTHONIOENCODING"] = "utf-8"
 
     search_script = r"""
 import sys, json
@@ -300,7 +105,7 @@ except Exception as e:
     result = subprocess.run(
         [python_exe, "-c", search_script],
         capture_output=True, text=True, timeout=30,
-        env=env,
+        env=env, encoding="utf-8", errors="replace",
     )
 
     if result.returncode != 0:
@@ -329,10 +134,9 @@ def run_spotdl(operation, queries, extra_args):
     output_dir = extra_args.get("output") or DEFAULT_OUTPUT
     os.makedirs(output_dir, exist_ok=True)
 
-    # Auto-set proxy if not specified
-    needs_proxy = operation in ("download", "sync", "url", "save")
+    # Auto-set proxy only when a default is configured (avoids printing "None").
     proxy = extra_args.get("proxy")
-    if needs_proxy and not proxy:
+    if not proxy and operation in ("download", "sync", "url", "save") and DEFAULT_PROXY:
         proxy = DEFAULT_PROXY
         print(f"[PROXY] Auto-applying default proxy: {proxy}")
 
@@ -364,7 +168,7 @@ def run_spotdl(operation, queries, extra_args):
     # spotDL only accepts HTTP/HTTPS in --proxy flag.
     # For SOCKS5 proxies, we must use --yt-dlp-args instead.
     if proxy:
-        if _is_socks_proxy(proxy):
+        if is_socks_proxy(proxy):
             # SOCKS5 proxy: pass via yt-dlp-args (bypasses spotDL's HTTP-only check)
             # yt-dlp directly supports socks5:// URLs
             existing_ytdlp = extra_args.get("yt_dlp_args", "")
@@ -403,24 +207,15 @@ def run_spotdl(operation, queries, extra_args):
     # Set environment variables for proxy (for Spotify API calls)
     env = os.environ.copy()
     if proxy:
-        env.update(_proxy_to_env(proxy))
+        env.update(proxy_to_env(proxy))
     env["PYTHONIOENCODING"] = "utf-8"
 
     print(f"\n[RUN] {' '.join(cmd)}")
     if proxy:
-        print(f"[ENV] Proxy env vars set: {_proxy_to_env(proxy)}")
+        print(f"[ENV] Proxy env vars set: {proxy_to_env(proxy)}")
     print("=" * 60)
 
-    # Stream output in real-time with UTF-8 encoding
-    proc = subprocess.Popen(
-        cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-        env=env, encoding="utf-8", errors="replace",
-    )
-    for line in proc.stdout:
-        print(line, end="")
-
-    proc.wait()
-    exit_code = proc.returncode
+    exit_code = run_streaming(cmd, env=env)
     print("=" * 60)
 
     if exit_code != 0:
@@ -477,8 +272,8 @@ def verify_downloads(output_dir):
 
 # --- Check command ---
 def check_install():
-    """Check if spotdl, ffmpeg, and PySocks are available."""
-    python_exe = _find_python_with_spotdl()
+    """Check if spotdl, ffmpeg, and PySocks are available (read-only, no install)."""
+    python_exe, spotdl_ver = detect_python_with("spotdl")
     info = {
         "spotdl_installed": python_exe is not None,
         "ffmpeg": False,
@@ -488,24 +283,13 @@ def check_install():
 
     if python_exe:
         info["python_path"] = python_exe
-        try:
-            result = subprocess.run(
-                [python_exe, "-m", "spotdl", "--version"],
-                capture_output=True, text=True, timeout=10,
-            )
-            info["spotdl_version"] = result.stdout.strip()
-        except Exception:
-            pass
+        if spotdl_ver:
+            info["spotdl_version"] = spotdl_ver
 
         # Check PySocks
-        try:
-            result = subprocess.run(
-                [python_exe, "-c", "import socks; print('PySocks OK')"],
-                capture_output=True, text=True, timeout=5,
-            )
-            info["pysocks"] = result.returncode == 0
-        except Exception:
-            pass
+        from melodymine_common import check_module
+        if check_module(python_exe, "socks"):
+            info["pysocks"] = True
 
     try:
         result = subprocess.run(

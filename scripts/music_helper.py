@@ -12,439 +12,179 @@ Usage:
     python scripts/music_helper.py download "周杰伦 稻香"
     python scripts/music_helper.py download "The Weeknd Blinding Lights" --proxy socks5://host:port
     python scripts/music_helper.py download "https://open.spotify.com/track/xxx"
+    python scripts/music_helper.py download "周杰伦 稻香" --dry-run --json
 """
 
 import argparse
-import glob
-import hashlib
 import json
 import os
 import re
-import shutil
 import subprocess
 import sys
 import time
 from pathlib import Path
 
-# ─── Constants ───────────────────────────────────────────────────────────
-
-HOME = os.path.expanduser("~")
-IS_WIN = sys.platform == "win32"
-IS_MAC = sys.platform == "darwin"
-IS_LINUX = sys.platform.startswith("linux")
-
-
-def _get_default_output():
-    """Pick a sensible default output directory that exists on this platform."""
-    for candidate in [
-        os.path.join(HOME, "Music", "MelodyMine"),     # Windows / macOS (~/Music exists)
-        os.path.join(HOME, "Downloads", "music"),      # Linux desktop (~/Downloads)
-        os.path.join(HOME, "music"),                   # Lowercase fallback
-        os.path.join(HOME, "MelodyMine-downloads"),    # Last resort
-    ]:
-        parent = os.path.dirname(candidate)
-        if os.path.isdir(parent):
-            return candidate
-    # Nothing exists — just use the first option, we'll mkdir it
-    return os.path.join(HOME, "Music", "MelodyMine")
-
-
-DEFAULT_OUTPUT = _get_default_output()
-
-BILI_UA = (
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-    "AppleWebKit/537.36 (KHTML, like Gecko) "
-    "Chrome/125.0.0.0 Safari/537.36"
+from melodymine_common import (
+    BILI_UA,
+    DEFAULT_OUTPUT,
+    PROXY_PLATFORMS,
+    SPOTIFY_RE,
+    auto_select_platform,
+    check_module,
+    find_ffmpeg,
+    find_python,
+    is_chinese,
+    is_spotify_url,
+    needs_proxy,
+    pip_install,
+    proxy_to_env,
+    run_streaming,
+    sanitize_filename,
 )
 
-PROXY_PLATFORMS = {"youtube", "soundcloud", "niconico", "vimeo"}
-
-SPOTIFY_RE = re.compile(
-    r"https?://(?:open\.spotify\.com|spotify\.link)/(?:track|album|playlist|artist)/"
-)
-
-# wbi signing mixin table (fixed by Bilibili)
-_MIXIN_KEY_ENC_TABS = [
-    46, 47, 18, 2, 53, 8, 23, 32, 15, 50, 10, 31, 58, 3, 45, 35,
-    27, 43, 5, 49, 33, 9, 42, 19, 29, 28, 14, 39, 12, 38, 41, 13,
-]
-
-# ─── Path / Dependency Detection (auto-bootstrap) ────────────────────────
+# ─── Dependencies ────────────────────────────────────────────────────────
 
 # pip packages required for full functionality
 REQUIRED_PACKAGES = ["yt-dlp", "requests", "pysocks"]
 OPTIONAL_PACKAGES = ["imageio-ffmpeg", "spotdl"]
 
-# Cached values (populated by ensure_deps)
-_CACHED_PYTHON = None
-_CACHED_YTDLP_VER = None
-_CACHED_FFMPEG = None
-_DEPS_CHECKED = False
 
-
-def _collect_python_candidates():
-    """Build an exhaustive list of Python interpreters to try."""
-    candidates = []
-
-    # 1. WorkBuddy venv (any version — don't hardcode)
-    wb_base = os.path.join(HOME, ".workbuddy", "binaries", "python")
-    if IS_WIN:
-        candidates.append(os.path.join(wb_base, "envs", "default", "Scripts", "python.exe"))
-        # Also try versioned dirs
-        versions_dir = os.path.join(wb_base, "versions")
-        if os.path.isdir(versions_dir):
-            for v in sorted(os.listdir(versions_dir), reverse=True):
-                candidates.append(os.path.join(versions_dir, v, "python.exe"))
-    else:
-        candidates.append(os.path.join(wb_base, "envs", "default", "bin", "python"))
-        versions_dir = os.path.join(wb_base, "versions")
-        if os.path.isdir(versions_dir):
-            for v in sorted(os.listdir(versions_dir), reverse=True):
-                candidates.append(os.path.join(versions_dir, v, "bin", "python"))
-
-    # 2. Current interpreter (whatever ran this script)
-    candidates.append(sys.executable)
-
-    # 3. python3 / python / py on PATH
-    for name in ["python3", "python", "py"]:
-        path = shutil.which(name)
-        if path:
-            candidates.append(path)
-
-    # 4. Common Windows install locations
-    if IS_WIN:
-        local_app = os.environ.get("LOCALAPPDATA", "")
-        prog_files = os.environ.get("ProgramFiles", "C:\\Program Files")
-        for ver in ["3.13", "3.12", "3.11", "3.10"]:
-            v = ver.replace(".", "")
-            candidates.append(f"{local_app}\\Programs\\Python\\Python{v}\\python.exe")
-            candidates.append(f"{prog_files}\\Python{v}\\python.exe")
-            candidates.append(f"C:\\Python{v}\\python.exe")
-
-    # 5. macOS / Linux common paths
-    if not IS_WIN:
-        for path in ["/usr/bin/python3", "/usr/local/bin/python3",
-                      "/opt/homebrew/bin/python3", "/usr/bin/python"]:
-            candidates.append(path)
-
-        # pyenv shims + version dirs
-        pyenv_root = os.environ.get("PYENV_ROOT", os.path.join(HOME, ".pyenv"))
-        candidates.append(os.path.join(pyenv_root, "shims", "python3"))
-        versions_dir = os.path.join(pyenv_root, "versions")
-        if os.path.isdir(versions_dir):
-            for v in sorted(os.listdir(versions_dir), reverse=True):
-                candidates.append(os.path.join(versions_dir, v, "bin", "python3"))
-
-        # conda / miniconda / anaconda
-        for conda_base in [
-            os.path.join(HOME, "miniconda3"),
-            os.path.join(HOME, "anaconda3"),
-            os.path.join(HOME, "miniforge3"),
-            "/opt/conda",
-        ]:
-            candidates.append(os.path.join(conda_base, "bin", "python3"))
-            envs_dir = os.path.join(conda_base, "envs")
-            if os.path.isdir(envs_dir):
-                for env_name in sorted(os.listdir(envs_dir)):
-                    candidates.append(os.path.join(envs_dir, env_name, "bin", "python3"))
-
-        # asdf
-        asdf_dir = os.path.join(HOME, ".asdf")
-        if os.path.isdir(asdf_dir):
-            for py_ver_dir in glob.glob(os.path.join(asdf_dir, "installs", "python", "*")):
-                candidates.append(os.path.join(py_ver_dir, "bin", "python3"))
-
-        # pip --user installs location
-        candidates.append(os.path.join(HOME, ".local", "bin", "python3"))
-
-    # 6. macOS framework Python (python.org installer)
-    if IS_MAC:
-        fw_base = "/Library/Frameworks/Python.framework/Versions"
-        if os.path.isdir(fw_base):
-            for v in sorted(os.listdir(fw_base), reverse=True):
-                candidates.append(os.path.join(fw_base, v, "bin", "python3"))
-
-    # Deduplicate while preserving order
-    seen = set()
-    unique = []
-    for c in candidates:
-        rp = os.path.realpath(c) if c else ""
-        if c and rp not in seen:
-            seen.add(rp)
-            unique.append(c)
-    return unique
-
-
-def _check_module(python, module_name, timeout=10):
-    """Check if a Python has a module installed. Returns version string or None."""
-    # yt_dlp stores version in yt_dlp.version.__version__, not top-level
-    version_expr = {
-        "yt_dlp": "yt_dlp.version.__version__",
-    }.get(module_name, f"getattr({module_name}, '__version__', 'ok')")
-    try:
-        result = subprocess.run(
-            [python, "-c", f"import {module_name}; print({version_expr})"],
-            capture_output=True, text=True, timeout=timeout,
-            encoding="utf-8", errors="replace",
-        )
-        if result.returncode == 0:
-            return result.stdout.strip()
-    except Exception:
-        pass
-    return None
-
-
-def _pip_install(python, packages, timeout=180):
-    """Install pip packages. Handles PEP 668 (externally-managed-environment).
-
-    Strategy: regular install → --user → report failure (caller may create venv).
-    Returns True on success.
-    """
-    if not packages:
-        return True
-
-    base_cmd = [python, "-m", "pip", "install", "--quiet", "--disable-pip-version-check"]
-
-    # Attempt 1: regular install
-    try:
-        result = subprocess.run(
-            base_cmd + packages,
-            capture_output=True, text=True, timeout=timeout,
-            encoding="utf-8", errors="replace",
-        )
-        if result.returncode == 0:
-            return True
-        # Check for PEP 668
-        stderr_lower = (result.stderr or "").lower()
-        if "externally-managed-environment" not in stderr_lower:
-            return False
-    except Exception:
-        return False
-
-    # Attempt 2: --user install (bypasses PEP 668 for user site-packages)
-    try:
-        result = subprocess.run(
-            base_cmd + ["--user"] + packages,
-            capture_output=True, text=True, timeout=timeout,
-            encoding="utf-8", errors="replace",
-        )
-        if result.returncode == 0:
-            return True
-    except Exception:
-        pass
-
-    return False
-
-
-# Dedicated venv path (created on demand when system Python is externally managed)
-_VENV_DIR = os.path.join(HOME, ".cache", "melodymine-venv")
-
-
-def _create_venv(base_python, timeout=120):
-    """Create a dedicated virtual environment and install all deps.
-    Returns (venv_python, yt_dlp_version) or (None, None).
-    """
-    if IS_WIN:
-        venv_py = os.path.join(_VENV_DIR, "Scripts", "python.exe")
-    else:
-        venv_py = os.path.join(_VENV_DIR, "bin", "python")
-
-    # Create venv if it doesn't exist
-    if not os.path.isfile(venv_py):
-        print(f"  Creating virtual environment at {_VENV_DIR}...")
-        try:
-            result = subprocess.run(
-                [base_python, "-m", "venv", _VENV_DIR],
-                capture_output=True, text=True, timeout=timeout,
-                encoding="utf-8", errors="replace",
-            )
-            if result.returncode != 0:
-                print(f"  [!] venv creation failed: {result.stderr[:200]}")
-                return None, None
-        except Exception as e:
-            print(f"  [!] venv creation error: {e}")
-            return None, None
-
-    # Install packages into venv (venvs are never externally-managed)
-    print(f"  Installing packages into venv...")
-    _pip_install(venv_py, REQUIRED_PACKAGES + ["imageio-ffmpeg"])
-
-    ver = _check_module(venv_py, "yt_dlp")
-    if ver:
-        return venv_py, ver
-    return None, None
-
-
-def find_python():
-    """
-    Find a Python interpreter with yt-dlp installed.
-    Auto-installs yt-dlp + requests + pysocks if not present.
-    Returns (path, yt_dlp_version) or (None, None).
-    """
-    global _CACHED_PYTHON, _CACHED_YTDLP_VER
-    if _CACHED_PYTHON:
-        return _CACHED_PYTHON, _CACHED_YTDLP_VER
-
-    candidates = _collect_python_candidates()
-
-    # Phase 1: find a Python that already has yt-dlp
-    for py in candidates:
-        if not py or not os.path.isfile(py):
-            continue
-        ver = _check_module(py, "yt_dlp")
-        if ver:
-            _CACHED_PYTHON = py
-            _CACHED_YTDLP_VER = ver
-            return py, ver
-
-    # Phase 2: find any working Python and auto-install deps
-    for py in candidates:
-        if not py or not os.path.isfile(py):
-            continue
-        # Verify pip works
-        pip_check = subprocess.run(
-            [py, "-m", "pip", "--version"],
-            capture_output=True, text=True, timeout=10,
-            encoding="utf-8", errors="replace",
-        )
-        if pip_check.returncode != 0:
-            continue
-
-        print(f"  Auto-installing: {', '.join(REQUIRED_PACKAGES)}")
-        print(f"  Using: {py}")
-        _pip_install(py, REQUIRED_PACKAGES)
-
-        ver = _check_module(py, "yt_dlp")
-        if ver:
-            _CACHED_PYTHON = py
-            _CACHED_YTDLP_VER = ver
-            return py, ver
-
-    # Phase 3: system Python is externally-managed (PEP 668) → create a venv
-    # Find ANY working Python to create the venv with
-    for py in candidates:
-        if not py or not os.path.isfile(py):
-            continue
-        ver_check = subprocess.run(
-            [py, "--version"], capture_output=True, text=True, timeout=5,
-            encoding="utf-8", errors="replace",
-        )
-        if ver_check.returncode == 0:
-            print(f"  System Python is externally-managed, creating isolated venv...")
-            venv_py, venv_ver = _create_venv(py)
-            if venv_py:
-                _CACHED_PYTHON = venv_py
-                _CACHED_YTDLP_VER = venv_ver
-                return venv_py, venv_ver
-            break  # don't try more candidates if venv creation failed
-
-    return None, None
-
-
-def find_ffmpeg(python=None):
-    """
-    Find ffmpeg executable.
-    Strategy: system PATH → imageio-ffmpeg (auto-installed pip package with bundled binary).
-    Returns the ffmpeg command/path, or None.
-    """
-    global _CACHED_FFMPEG
-    if _CACHED_FFMPEG:
-        return _CACHED_FFMPEG
-
-    # 1. Try system ffmpeg on PATH
-    for exe in ["ffmpeg", "ffmpeg.exe"]:
-        try:
-            result = subprocess.run(
-                [exe, "-version"],
-                capture_output=True, text=True, timeout=5,
-                encoding="utf-8", errors="replace",
-            )
-            if result.returncode == 0:
-                _CACHED_FFMPEG = exe
-                return exe
-        except Exception:
-            pass
-
-    # 2. Try imageio-ffmpeg (bundled static ffmpeg binary)
-    if python is None:
-        python, _ = find_python()
-    if python:
-        # Auto-install if missing
-        if not _check_module(python, "imageio_ffmpeg"):
-            print("  Auto-installing: imageio-ffmpeg (bundled ffmpeg binary)")
-            _pip_install(python, ["imageio-ffmpeg"])
-        try:
-            result = subprocess.run(
-                [python, "-c", "import imageio_ffmpeg; print(imageio_ffmpeg.get_ffmpeg_exe())"],
-                capture_output=True, text=True, timeout=15,
-                encoding="utf-8", errors="replace",
-            )
-            if result.returncode == 0:
-                path = result.stdout.strip()
-                if path and os.path.isfile(path):
-                    _CACHED_FFMPEG = path
-                    return path
-        except Exception:
-            pass
-
-    return None
+def _find_music_python():
+    """Find a Python with yt-dlp (auto-installs deps + imageio-ffmpeg)."""
+    return find_python("yt_dlp", REQUIRED_PACKAGES + ["imageio-ffmpeg"])
 
 
 def ensure_deps():
-    """
-    Ensure all dependencies are available. Called at the start of every command.
-    Populates cached values for find_python() and find_ffmpeg().
+    """Ensure all dependencies are available. Called at the start of every command.
+
     Returns (python, yt_dlp_ver, ffmpeg_path) or (None, None, None).
     """
-    global _DEPS_CHECKED
-    if _DEPS_CHECKED:
-        py, ver = find_python()
-        return py, ver, find_ffmpeg(py)
-    _DEPS_CHECKED = True
-
-    py, ver = find_python()
+    py, ver = _find_music_python()
     if not py:
         return None, None, None
-
     ff = find_ffmpeg(py)
     return py, ver, ff
 
 
 def has_spotdl(python):
-    try:
-        result = subprocess.run(
-            [python, "-c", "import spotdl; print(spotdl.__version__)"],
-            capture_output=True, text=True, timeout=10,
-            encoding="utf-8", errors="replace",
-        )
-        if result.returncode == 0:
-            return result.stdout.strip()
-    except Exception:
-        pass
-    return None
+    """Return spotdl version string if installed, else None."""
+    return check_module(python, "spotdl")
 
 
-# ─── Language Detection ──────────────────────────────────────────────────
-
-def is_chinese(text):
-    for ch in text:
-        if "\u4e00" <= ch <= "\u9fff":
-            return True
-    return False
+# ─── JSON / Plan helpers ─────────────────────────────────────────────────
 
 
-def auto_select_platform(query):
-    if is_chinese(query):
-        return "bilibili"
-    return "youtube"
+def _emit_json(payload):
+    """Print one machine-readable JSON line for agents."""
+    print(json.dumps(payload, ensure_ascii=False))
 
 
-def needs_proxy(platform):
-    return platform in PROXY_PLATFORMS
+def _download_plan(
+    query, platform="auto", fmt="mp3", output=None, proxy=None, bitrate=None,
+    index=1, embed_thumbnail=True, no_metadata=False, cookies=None,
+):
+    """Build a side-effect-free execution plan for dry-run and JSON reporting."""
+    if not output:
+        output = DEFAULT_OUTPUT
+
+    if is_spotify_url(query):
+        command = [
+            "python", "-m", "spotdl", "download", query,
+            "--output", output,
+            "--format", fmt,
+            "--print-errors",
+        ]
+        if bitrate:
+            command.extend(["--bitrate", str(bitrate)])
+        if proxy:
+            if proxy.startswith("socks5"):
+                command.extend(["--yt-dlp-args", f"--proxy {proxy}"])
+            else:
+                command.extend(["--proxy", proxy])
+        return {
+            "ok": True,
+            "dry_run": True,
+            "engine": "spotdl",
+            "platform": "spotify",
+            "query": query,
+            "format": fmt,
+            "output": output,
+            "proxy": proxy,
+            "cookies": cookies,
+            "command": command,
+            "notes": ["Spotify URLs are handled by spotDL."],
+        }
+
+    selected = auto_select_platform(query) if platform == "auto" else platform
+    notes = []
+
+    # Common yt-dlp args (mirrors _ytdlp_download); URL slot (index 3) filled per-platform.
+    command = [
+        "python", "-m", "yt_dlp",
+        "<URL-or-ytsearch>",  # index 3 — filled below
+        "--playlist-items", str(index),
+        "-f", "bestaudio/best",
+        "-x",
+        "--audio-format", fmt,
+        "--embed-metadata",
+        "-o", os.path.join(output, "%(title)s.%(ext)s"),
+        "--no-warnings",
+        "--newline",
+    ]
+    if bitrate:
+        command.extend(["--audio-quality", str(bitrate)])
+    else:
+        command.extend(["--audio-quality", "0"])
+    if embed_thumbnail:
+        command.append("--embed-thumbnail")
+
+    if selected == "bilibili":
+        # Bilibili: wbi search resolves the BV URL, then yt-dlp downloads it.
+        command[3] = "https://www.bilibili.com/video/<bvid>"
+        command.extend(["--user-agent", BILI_UA])
+        notes.append("Bilibili dry-run: bvid is resolved at runtime via wbi search.")
+        notes.append("If Bilibili search/download fails, MelodyMine falls back to YouTube.")
+    else:
+        command[3] = f"ytsearch:{query}"
+        notes.append("YouTube: yt-dlp search + download in one step.")
+
+    if proxy:
+        command.extend(["--proxy", proxy])
+    if cookies:
+        command.extend(["--cookies", cookies])
+
+    return {
+        "ok": True,
+        "dry_run": True,
+        "engine": "yt-dlp",
+        "platform": selected,
+        "query": query,
+        "format": fmt,
+        "output": output,
+        "proxy": proxy,
+        "cookies": cookies,
+        "index": index,
+        "embed_thumbnail": embed_thumbnail,
+        "metadata": not no_metadata,
+        "command": command,
+        "notes": notes,
+    }
 
 
-def is_spotify_url(text):
-    return bool(SPOTIFY_RE.search(text))
+def _print_plan(plan):
+    print("=== MelodyMine dry run ===")
+    print(f"Platform : {plan['platform']}")
+    print(f"Engine   : {plan['engine']}")
+    print(f"Query    : {plan['query']}")
+    print(f"Format   : {plan['format']}")
+    print(f"Output   : {plan['output']}")
+    if plan.get("proxy"):
+        print(f"Proxy    : {plan['proxy']}")
+    if plan.get("cookies"):
+        print(f"Cookies  : {plan['cookies']}")
+    print("Command  : " + " ".join(str(part) for part in plan["command"]))
+    for note in plan.get("notes", []):
+        print(f"Note     : {note}")
 
 
 # ─── Bilibili wbi Search (bypasses yt-dlp broken search) ─────────────────
@@ -514,7 +254,7 @@ def bili_search(query, limit=5, python=None):
     Returns list of dicts: {bvid, aid, title, duration, play, uploader}
     """
     if python is None:
-        python, _ = find_python()
+        python, _ = _find_music_python()
     if not python:
         print("  [!] No Python with requests found")
         return []
@@ -690,7 +430,7 @@ def metadata_lookup(query, python=None, limit=3):
     or empty list on failure.
     """
     if python is None:
-        python, _ = find_python()
+        python, _ = _find_music_python()
     if not python:
         return []
 
@@ -780,13 +520,6 @@ def parse_bili_title(title):
     return artist, song_name
 
 
-def sanitize_filename(name):
-    """Sanitize a string for use as a filename (cross-platform safe)."""
-    name = re.sub(r'[<>:"/\\|?*]', "", name)
-    name = re.sub(r"\s+", " ", name).strip()
-    return name
-
-
 def find_downloaded_file(output_dir):
     """Find the most recently created/modified audio file in output_dir."""
     audio_exts = {".mp3", ".flac", ".m4a", ".opus", ".wav", ".vorbis", ".ogg", ".webm"}
@@ -805,7 +538,7 @@ def download_cover(url, python=None):
     if not url:
         return None
     if python is None:
-        python, _ = find_python()
+        python, _ = _find_music_python()
     if not python:
         return None
     env = os.environ.copy()
@@ -920,7 +653,7 @@ def enhance_metadata(python, search_query, bili_title, output_dir):
     print(f"  Looking up album info on NetEase Music: {search_query}")
     results = metadata_lookup(search_query, python=python, limit=10)
     if results:
-        # Find best match: prefer exact artist match (single-artist tracks)
+        # Find best match: Prefer exact artist match (single-artist tracks)
         # to avoid picking up covers/remixes with collaborators
         best = None
         best_score = -1
@@ -1054,14 +787,7 @@ def _ytdlp_download(
     env = os.environ.copy()
     env["PYTHONIOENCODING"] = "utf-8"
 
-    proc = subprocess.Popen(
-        cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-        env=env, encoding="utf-8", errors="replace",
-    )
-    for line in proc.stdout:
-        print(line, end="")
-    proc.wait()
-    return proc.returncode == 0
+    return run_streaming(cmd, env=env) == 0
 
 
 # ─── Commands ────────────────────────────────────────────────────────────
@@ -1073,39 +799,23 @@ def cmd_setup():
     print("=" * 60)
     print()
 
-    # Step 1: Find Python
-    print("[1/4] Finding Python interpreter...")
-    candidates = _collect_python_candidates()
-    working_py = None
-    for py in candidates:
-        if not py or not os.path.isfile(py):
-            continue
-        ver = subprocess.run(
-            [py, "--version"], capture_output=True, text=True, timeout=5,
-            encoding="utf-8", errors="replace",
-        )
-        if ver.returncode == 0:
-            print(f"  Found: {py} ({ver.stdout.strip()})")
-            working_py = py
-            break
-
-    if not working_py:
+    # Step 1: Find Python via the shared discovery (auto-installs deps)
+    print("[1/4] Finding Python interpreter + installing dependencies...")
+    py, ytdlp_ver = _find_music_python()
+    if not py:
         print("  [FAIL] No Python found on this system.")
         print("         Install Python 3.10+ from https://python.org")
         return False
+    print(f"  Found: {py}")
+    if ytdlp_ver:
+        print(f"  yt-dlp: v{ytdlp_ver}")
     print()
 
-    # Step 2: Install pip packages
-    print("[2/4] Installing Python packages (yt-dlp, requests, pysocks, imageio-ffmpeg)...")
-    ok = _pip_install(working_py, REQUIRED_PACKAGES + ["imageio-ffmpeg"])
-    if ok:
-        print("  [OK] All packages installed")
-    else:
-        print("  [WARN] Some packages may have failed to install")
-    # Verify
+    # Step 2: Verify packages
+    print("[2/4] Verifying Python packages...")
     for pkg, mod in [("yt-dlp", "yt_dlp"), ("requests", "requests"),
                       ("pysocks", "socks"), ("imageio-ffmpeg", "imageio_ffmpeg")]:
-        ver = _check_module(working_py, mod)
+        ver = check_module(py, mod)
         if ver:
             print(f"  [OK]   {pkg:20s} {ver}")
         else:
@@ -1115,9 +825,9 @@ def cmd_setup():
     # Step 3: Find ffmpeg
     print("[3/4] Locating ffmpeg...")
     # Force re-detection (clear cache)
-    global _CACHED_FFMPEG
-    _CACHED_FFMPEG = None
-    ff = find_ffmpeg(working_py)
+    import melodymine_common as _mc
+    _mc._CACHED_FFMPEG = None
+    ff = find_ffmpeg(py)
     if ff:
         # Get version
         try:
@@ -1139,16 +849,16 @@ def cmd_setup():
     print(f'    python scripts/music_helper.py download "周杰伦 稻香"')
     print()
     print("  Platform availability:")
-    has_yt = _check_module(working_py, "yt_dlp")
-    has_req = _check_module(working_py, "requests")
-    has_socks = _check_module(working_py, "socks")
+    has_yt = check_module(py, "yt_dlp")
+    has_req = check_module(py, "requests")
+    has_socks = check_module(py, "socks")
     if has_yt and ff:
         print("    [OK] Bilibili  (Chinese songs, no proxy needed)")
     if has_yt and has_socks and ff:
         print("    [OK] YouTube   (English songs, needs --proxy socks5://...)")
     if has_req:
         print("    [OK] NetEase   (metadata lookup for album/cover)")
-    sp = has_spotdl(working_py)
+    sp = has_spotdl(py)
     if sp:
         print(f"    [OK] Spotify   (via spotDL v{sp})")
     else:
@@ -1178,14 +888,14 @@ def cmd_check():
         return False
 
     # requests (for Bilibili wbi search)
-    req_ver = _check_module(py, "requests")
+    req_ver = check_module(py, "requests")
     if req_ver:
         print(f"  [OK]   requests:      v{req_ver} (for Bilibili API)")
     else:
         print("  [--]   requests:      not installed (auto-installs on first use)")
 
     # PySocks (for SOCKS5 proxy)
-    socks_ver = _check_module(py, "socks")
+    socks_ver = check_module(py, "socks")
     if socks_ver:
         print(f"  [OK]   PySocks:       available (for SOCKS5 proxy)")
     else:
@@ -1272,9 +982,20 @@ def cmd_search(query, platform="auto", limit=5, proxy=None):
 def cmd_download(
     query, platform="auto", fmt="mp3", output=None,
     proxy=None, bitrate=None, index=1, embed_thumbnail=True,
-    no_metadata=False, cookies=None,
+    no_metadata=False, cookies=None, dry_run=False, json_output=False,
 ):
     """Download a song with automatic platform selection and fallback."""
+    if dry_run:
+        plan = _download_plan(
+            query, platform, fmt, output, proxy, bitrate, index,
+            embed_thumbnail, no_metadata, cookies,
+        )
+        if json_output:
+            _emit_json(plan)
+        else:
+            _print_plan(plan)
+        return plan
+
     py, _, _ = ensure_deps()
     if not py:
         print("ERROR: No Python with yt-dlp found. Run 'setup' first:")
@@ -1331,7 +1052,19 @@ def cmd_download(
                 enhance_metadata(py, query, item["title"], output)
             print(f"\n[OK] Download complete!")
             print(f"     Files saved to: {output}")
-            return
+            return {
+                "ok": True,
+                "platform": "bilibili",
+                "engine": "yt-dlp",
+                "query": query,
+                "source_url": url,
+                "format": fmt,
+                "output": output,
+                "proxy": proxy,
+                "cookies": cookies,
+                "metadata": not no_metadata,
+                "fallback": False,
+            }
 
         # Bilibili download failed → try YouTube fallback
         print(f"\n  Bilibili download failed.")
@@ -1380,7 +1113,18 @@ def _do_youtube_download(
             enhance_metadata(py, query, "", output)
         print(f"\n[OK] Download complete!")
         print(f"     Files saved to: {output}")
-        return
+        return {
+            "ok": True,
+            "platform": "youtube",
+            "engine": "yt-dlp",
+            "query": query,
+            "source_url": search_query,
+            "format": fmt,
+            "output": output,
+            "proxy": proxy,
+            "cookies": cookies,
+            "metadata": not no_metadata,
+        }
 
     print(f"\n[FAIL] YouTube download failed.")
     print("\n--- Common YouTube Issues ---")
@@ -1405,7 +1149,7 @@ def _download_via_spotdl(python, url, fmt, output, proxy, bitrate):
     sp_ver = has_spotdl(python)
     if not sp_ver:
         print("  spotDL not installed, auto-installing...")
-        _pip_install(python, ["spotdl"])
+        pip_install(python, ["spotdl"])
         sp_ver = has_spotdl(python)
     if not sp_ver:
         print("ERROR: spotDL installation failed.")
@@ -1446,16 +1190,10 @@ def _download_via_spotdl(python, url, fmt, output, proxy, bitrate):
     print("=" * 60)
     print()
 
-    proc = subprocess.Popen(
-        cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-        env=env, encoding="utf-8", errors="replace",
-    )
-    for line in proc.stdout:
-        print(line, end="")
-    proc.wait()
+    exit_code = run_streaming(cmd, env=env)
 
-    if proc.returncode != 0:
-        print(f"\n[FAIL] spotDL exited with code {proc.returncode}")
+    if exit_code != 0:
+        print(f"\n[FAIL] spotDL exited with code {exit_code}")
         print("\n--- Common spotDL Issues ---")
         print("  1. KeyError 'uri'   -> SpotipyFree API bug")
         print("  2. YouTube blocked  -> Ensure proxy is working")
@@ -1464,6 +1202,18 @@ def _download_via_spotdl(python, url, fmt, output, proxy, bitrate):
 
     print(f"\n[OK] Download complete!")
     print(f"     Files saved to: {output}")
+    return {
+        "ok": True,
+        "platform": "spotify",
+        "engine": "spotdl",
+        "query": url,
+        "source_url": url,
+        "format": fmt,
+        "output": output,
+        "proxy": proxy,
+        "cookies": None,
+        "metadata": True,
+    }
 
 
 # ─── CLI ─────────────────────────────────────────────────────────────────
@@ -1483,6 +1233,8 @@ Examples:
   download "https://open.spotify.com/track/xxx"   Via spotDL
   download "周杰伦 稻香" --format flac        FLAC format
   download "周杰伦 稻香" --index 2           Download 2nd search result
+  download "周杰伦 稻香" --dry-run           Preview the command without executing
+  download "周杰伦 稻香" --dry-run --json    Machine-readable plan for agents
         """,
     )
     sub = parser.add_subparsers(dest="operation")
@@ -1508,6 +1260,10 @@ Examples:
     p_dl.add_argument("--no-thumbnail", action="store_true")
     p_dl.add_argument("--no-metadata", action="store_true",
                       help="Skip metadata enhancement (NetEase lookup + ID3 tags + rename)")
+    p_dl.add_argument("--dry-run", action="store_true",
+                      help="Print the command that would run without executing")
+    p_dl.add_argument("--json", action="store_true",
+                      help="Output machine-readable JSON (use with --dry-run or after download)")
 
     args = parser.parse_args()
 
@@ -1520,7 +1276,7 @@ Examples:
     elif args.operation == "search":
         cmd_search(args.query, args.platform, args.limit, args.proxy)
     elif args.operation == "download":
-        cmd_download(
+        result = cmd_download(
             args.query,
             platform=args.platform,
             fmt=args.format,
@@ -1531,7 +1287,12 @@ Examples:
             index=args.index,
             embed_thumbnail=not args.no_thumbnail,
             no_metadata=args.no_metadata,
+            dry_run=args.dry_run,
+            json_output=args.json,
         )
+        # Emit JSON for non-dry-run successful downloads (dry-run already emitted).
+        if args.json and not args.dry_run and isinstance(result, dict):
+            _emit_json(result)
     else:
         parser.print_help()
 
