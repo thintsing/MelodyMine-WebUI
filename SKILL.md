@@ -84,6 +84,14 @@ NetEase URL (resolved to song name, then downloaded via Bilibili/YouTube):
 python scripts/music_helper.py download "https://music.163.com/song?id=185809"
 ```
 
+Direct URL (YouTube / SoundCloud / Bandcamp — yt-dlp downloads directly, no search):
+
+```bash
+python scripts/music_helper.py download "https://www.youtube.com/watch?v=..."
+python scripts/music_helper.py download "https://soundcloud.com/artist/song"
+python scripts/music_helper.py download "https://artist.bandcamp.com/track/song"
+```
+
 Force platform:
 
 ```bash
@@ -136,6 +144,7 @@ python scripts/music_helper.py download "Artist Song" --cookies "/path/to/cookie
 | English/non-Chinese query | YouTube | Try direct first. Add proxy only after network failure. |
 | Spotify URL | spotDL through `music_helper.py` | May need proxy in restricted regions. For playlist sync use `spotify_helper.py`. |
 | NetEase URL (`music.163.com/song?id=xxx`) | Resolved to song name, then Bilibili/YouTube | The URL is translated to "Artist Title" via NetEase API, then downloaded via the normal pipeline. |
+| YouTube/SoundCloud/Bandcamp URL | yt-dlp direct download | No search step — yt-dlp downloads the URL directly. YouTube may need proxy/cookies. |
 
 ## Error Handling
 

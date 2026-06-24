@@ -52,6 +52,14 @@ Download from a NetEase URL (resolved to song name, then Bilibili/YouTube):
 python scripts/music_helper.py download "https://music.163.com/song?id=185809"
 ```
 
+Download from a direct URL (YouTube / SoundCloud / Bandcamp):
+
+```bash
+python scripts/music_helper.py download "https://www.youtube.com/watch?v=..."
+python scripts/music_helper.py download "https://soundcloud.com/artist/song"
+python scripts/music_helper.py download "https://artist.bandcamp.com/track/song"
+```
+
 Search without downloading:
 
 ```bash
@@ -119,6 +127,7 @@ Options:
 | English or non-Chinese query | YouTube | Try direct first; add proxy after network failure. |
 | Spotify URL | spotDL | Auto-installs spotDL on first use if possible. |
 | NetEase URL (`music.163.com`) | Resolved → Bilibili/YouTube | Song name extracted via NetEase API, then downloaded via the normal pipeline. |
+| YouTube/SoundCloud/Bandcamp URL | yt-dlp direct | No search step — downloads the URL directly. YouTube may need `--proxy`. |
 
 ## Advanced Spotify Operations
 

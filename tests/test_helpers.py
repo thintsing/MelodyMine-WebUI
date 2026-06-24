@@ -21,9 +21,13 @@ sys.path.insert(0, os.path.abspath(_SCRIPTS))
 from melodymine_common import (  # noqa: E402
     auto_select_platform,
     extract_netease_song_id,
+    is_bandcamp_url,
     is_chinese,
+    is_direct_download_url,
     is_netease_url,
+    is_soundcloud_url,
     is_spotify_url,
+    is_youtube_url,
     sanitize_filename,
 )
 from music_helper import (  # noqa: E402
@@ -221,6 +225,61 @@ class TestSanitizeFilename(unittest.TestCase):
 
     def test_empty(self):
         self.assertEqual(sanitize_filename(""), "")
+
+
+class TestIsYoutubeUrl(unittest.TestCase):
+
+    def test_watch_url(self):
+        self.assertTrue(is_youtube_url("https://www.youtube.com/watch?v=dQw4w9WgXcQ"))
+
+    def test_short_url(self):
+        self.assertTrue(is_youtube_url("https://youtu.be/dQw4w9WgXcQ"))
+
+    def test_mobile_url(self):
+        self.assertTrue(is_youtube_url("https://m.youtube.com/watch?v=abc123"))
+
+    def test_non_youtube(self):
+        self.assertFalse(is_youtube_url("https://soundcloud.com/artist/song"))
+        self.assertFalse(is_youtube_url("not a url"))
+
+
+class TestIsSoundcloudUrl(unittest.TestCase):
+
+    def test_track_url(self):
+        self.assertTrue(is_soundcloud_url("https://soundcloud.com/artist/song-title"))
+
+    def test_www_prefix(self):
+        self.assertTrue(is_soundcloud_url("https://www.soundcloud.com/artist/song"))
+
+    def test_non_soundcloud(self):
+        self.assertFalse(is_soundcloud_url("https://www.youtube.com/watch?v=abc"))
+
+
+class TestIsBandcampUrl(unittest.TestCase):
+
+    def test_track_url(self):
+        self.assertTrue(is_bandcamp_url("https://artist.bandcamp.com/track/song-name"))
+
+    def test_non_bandcamp(self):
+        self.assertFalse(is_bandcamp_url("https://soundcloud.com/artist/song"))
+
+
+class TestIsDirectDownloadUrl(unittest.TestCase):
+
+    def test_youtube_is_direct(self):
+        self.assertTrue(is_direct_download_url("https://youtu.be/abc123"))
+
+    def test_soundcloud_is_direct(self):
+        self.assertTrue(is_direct_download_url("https://soundcloud.com/a/b"))
+
+    def test_bandcamp_is_direct(self):
+        self.assertTrue(is_direct_download_url("https://a.bandcamp.com/track/b"))
+
+    def test_spotify_is_not_direct(self):
+        self.assertFalse(is_direct_download_url("https://open.spotify.com/track/abc"))
+
+    def test_netease_is_not_direct(self):
+        self.assertFalse(is_direct_download_url("https://music.163.com/song?id=123"))
 
 
 class TestIsChinese(unittest.TestCase):

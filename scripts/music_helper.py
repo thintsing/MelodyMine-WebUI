@@ -38,9 +38,13 @@ from melodymine_common import (
     extract_netease_song_id,
     find_ffmpeg,
     find_python,
+    is_bandcamp_url,
     is_chinese,
+    is_direct_download_url,
     is_netease_url,
+    is_soundcloud_url,
     is_spotify_url,
+    is_youtube_url,
     needs_proxy,
     pip_install,
     proxy_to_env,
@@ -171,6 +175,36 @@ def _download_plan(
 
     # NetEase URLs are resolved at runtime (requires network), so dry-run just notes it.
     netease_resolved = is_netease_url(query)
+
+    # Direct download URLs (YouTube/SoundCloud/Bandcamp) skip search entirely.
+    if is_direct_download_url(query):
+        if is_youtube_url(query):
+            src = "YouTube"
+        elif is_soundcloud_url(query):
+            src = "SoundCloud"
+        else:
+            src = "Bandcamp"
+        command = _build_ytdlp_cmd(
+            "python", query, output, fmt, bitrate,
+            embed_thumbnail=embed_thumbnail, proxy=proxy, cookies=cookies,
+            index=index,
+        )
+        return {
+            "ok": True,
+            "dry_run": True,
+            "engine": "yt-dlp",
+            "platform": src.lower(),
+            "query": query,
+            "format": fmt,
+            "output": output,
+            "proxy": proxy,
+            "cookies": cookies,
+            "index": index,
+            "embed_thumbnail": embed_thumbnail,
+            "metadata": not no_metadata,
+            "command": command,
+            "notes": [f"{src}: direct URL download via yt-dlp (no search step)."],
+        }
 
     selected = auto_select_platform(query) if platform == "auto" else platform
     notes = []
@@ -1532,6 +1566,12 @@ def cmd_download(
             print("  [!] Could not resolve NetEase URL, using raw URL as query")
         # Fall through to normal platform selection with resolved query
 
+    # ── Direct download URLs (YouTube/SoundCloud/Bandcamp) → yt-dlp directly ──
+    if is_direct_download_url(query):
+        debug_log(f"route: direct url → yt-dlp ({'youtube' if is_youtube_url(query) else 'soundcloud' if is_soundcloud_url(query) else 'bandcamp'})")
+        return _download_direct(py, query, fmt, output, proxy, bitrate,
+                                index, embed_thumbnail, no_metadata, cookies)
+
     if platform == "auto":
         platform = auto_select_platform(query)
         debug_log(f"auto-selected platform: {platform}")
@@ -1685,6 +1725,71 @@ def _do_youtube_download(
         print("  3. Proxy connection failed")
         print("     → Check proxy is working: curl --proxy socks5://host:port https://youtube.com")
     print("  4. Try different search terms (English names for Chinese songs)")
+    sys.exit(1)
+
+
+def _download_direct(
+    py, url, fmt, output, proxy, bitrate,
+    index, embed_thumbnail, no_metadata, cookies,
+):
+    """Download a direct URL (YouTube/SoundCloud/Bandcamp) via yt-dlp.
+
+    No search step — yt-dlp downloads the URL directly.
+    """
+    if is_youtube_url(url):
+        source = "YouTube"
+    elif is_soundcloud_url(url):
+        source = "SoundCloud"
+    elif is_bandcamp_url(url):
+        source = "Bandcamp"
+    else:
+        source = "Direct URL"
+
+    if not output:
+        output = DEFAULT_OUTPUT
+    os.makedirs(output, exist_ok=True)
+
+    print("=" * 60)
+    print(f"  Source   : {source} (direct URL)")
+    print(f"  URL      : {url}")
+    print(f"  Format   : {fmt}")
+    print(f"  Output   : {output}")
+    if proxy:
+        print(f"  Proxy    : {proxy}")
+    if cookies:
+        print(f"  Cookies  : {cookies}")
+    print("=" * 60)
+    print()
+
+    ok = _ytdlp_download(
+        py, url, output, fmt, bitrate, embed_thumbnail,
+        proxy=proxy, index=index, cookies=cookies,
+    )
+    if ok:
+        if not no_metadata:
+            enhance_metadata(py, url, "", output)
+        print(f"\n[OK] Download complete!")
+        print(f"     Files saved to: {output}")
+        return {
+            "ok": True,
+            "platform": source.lower(),
+            "engine": "yt-dlp",
+            "query": url,
+            "source_url": url,
+            "format": fmt,
+            "output": output,
+            "proxy": proxy,
+            "cookies": cookies,
+            "metadata": not no_metadata,
+        }
+
+    print(f"\n[FAIL] {source} download failed.")
+    if is_youtube_url(url) and not proxy:
+        print("  → If you're in China, YouTube is blocked. Add: --proxy socks5://HOST:PORT")
+    elif is_youtube_url(url):
+        print("  → Check proxy is working, or try: --cookies cookies.txt")
+    else:
+        print("  → Check the URL is valid and publicly accessible.")
     sys.exit(1)
 
 

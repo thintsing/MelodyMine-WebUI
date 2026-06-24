@@ -49,6 +49,17 @@ NETEASE_RE = re.compile(
     r"https?://(?:music\.163\.com|y\.music\.126\.com)/\S*[?&]ids?=(\d+)"
 )
 
+# Direct audio source URLs that yt-dlp can download without a search step.
+YOUTUBE_RE = re.compile(
+    r"https?://(?:www\.|m\.)?(?:youtube\.com/watch\?v=|youtu\.be/)[\w\-]{6,}"
+)
+SOUNDCLOUD_RE = re.compile(
+    r"https?://(?:www\.|m\.)?soundcloud\.com/[\w\-]+/[\w\-]+"
+)
+BANDCAMP_RE = re.compile(
+    r"https?://[\w\-]+\.bandcamp\.com/track/[\w\-]+"
+)
+
 # Unified venv path shared by both helpers so dependencies are installed once.
 VENV_DIR = os.path.join(HOME, ".cache", "melodymine-venv")
 
@@ -546,6 +557,29 @@ def extract_netease_song_id(text):
     """Extract the numeric song ID from a NetEase URL. Returns str or None."""
     m = NETEASE_RE.search(text)
     return m.group(1) if m else None
+
+
+def is_youtube_url(text):
+    """Check if text is a direct YouTube video URL (not a search query)."""
+    return bool(YOUTUBE_RE.search(text))
+
+
+def is_soundcloud_url(text):
+    """Check if text is a SoundCloud track URL."""
+    return bool(SOUNDCLOUD_RE.search(text))
+
+
+def is_bandcamp_url(text):
+    """Check if text is a Bandcamp track URL."""
+    return bool(BANDCAMP_RE.search(text))
+
+
+def is_direct_download_url(text):
+    """Check if text is a URL that yt-dlp can download directly (no search needed).
+
+    Covers YouTube, SoundCloud, and Bandcamp. Spotify/NetEase need special handling.
+    """
+    return is_youtube_url(text) or is_soundcloud_url(text) or is_bandcamp_url(text)
 
 
 # ─── Misc ────────────────────────────────────────────────────────────────
