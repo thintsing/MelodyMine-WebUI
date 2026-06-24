@@ -1686,7 +1686,7 @@ Examples:
     p_dl = sub.add_parser("download", help="Download a song")
     p_dl.add_argument("query", help="Song name, artist, Spotify URL, or search query")
     p_dl.add_argument("--platform", default="auto", choices=["auto", "bilibili", "youtube"])
-    p_dl.add_argument("--format", default="mp3", choices=["mp3", "flac", "m4a", "opus", "wav", "vorbis"])
+    p_dl.add_argument("--format", default="flac", choices=["mp3", "flac", "m4a", "opus", "wav", "vorbis"])
     p_dl.add_argument("--output", default=None, help="Output dir (default: ~/Music/MelodyMine)")
     p_dl.add_argument("--proxy", default=None, help="Proxy for YouTube (e.g. socks5://host:port)")
     p_dl.add_argument("--cookies", default=None, help="cookies.txt path for YouTube sign-in/bot checks")
