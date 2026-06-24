@@ -20,7 +20,7 @@ Usage:
     python spotify_helper.py check                                    # Check dependencies
     python spotify_helper.py search "周杰伦 稻香"                      # Search Spotify for URL
     python spotify_helper.py download "URL_or_query" [--proxy ...]    # Download music
-    python spotify_helper.py download "URL" --format mp3              # Auto-applies default proxy
+    python spotify_helper.py download "URL" --format mp3              # Pass --proxy if needed
     python spotify_helper.py sync "URL" --save-file x.spotdl          # Sync playlist
     python spotify_helper.py save "query"                              # Save metadata only
     python spotify_helper.py url "query"                               # Get YouTube URL
@@ -35,7 +35,9 @@ import sys
 
 from melodymine_common import (
     DEFAULT_OUTPUT,
+    build_spotdl_proxy_args,
     detect_python_with,
+    find_ffmpeg,
     find_python,
     is_socks_proxy,
     pip_install,
@@ -86,6 +88,7 @@ try:
     from spotdl.utils.spotify import SpotifyClient
     SpotifyClient.init()
     client = SpotifyClient.getInstance()
+    query = sys.argv[1]
     results = client.search(query, type='track')
     tracks = results.get('tracks', {}).get('items', [])
     output = []
@@ -106,7 +109,7 @@ except Exception as e:
 
     print(f"[SEARCH] Searching Spotify for: {query}")
     result = subprocess.run(
-        [python_exe, "-c", search_script],
+        [python_exe, "-c", search_script, query],
         capture_output=True, text=True, timeout=30,
         env=env, encoding="utf-8", errors="replace",
     )
@@ -167,24 +170,13 @@ def run_spotdl(operation, queries, extra_args):
         if val is not None:
             cmd.extend([flag, str(val)])
 
-    # PROXY HANDLING - the critical part
-    # spotDL only accepts HTTP/HTTPS in --proxy flag.
-    # For SOCKS5 proxies, we must use --yt-dlp-args instead.
+    # PROXY HANDLING — shared with music_helper via build_spotdl_proxy_args.
+    # spotDL only accepts HTTP/HTTPS in --proxy flag; SOCKS5 must go via --yt-dlp-args.
     if proxy:
+        cmd.extend(build_spotdl_proxy_args(proxy))
         if is_socks_proxy(proxy):
-            # SOCKS5 proxy: pass via yt-dlp-args (bypasses spotDL's HTTP-only check)
-            # yt-dlp directly supports socks5:// URLs
-            existing_ytdlp = extra_args.get("yt_dlp_args", "")
-            proxy_arg = f"--proxy {proxy}"
-            if existing_ytdlp:
-                yt_dlp_args_val = f"{existing_ytdlp} {proxy_arg}"
-            else:
-                yt_dlp_args_val = proxy_arg
-            cmd.extend(["--yt-dlp-args", yt_dlp_args_val])
             print(f"[PROXY] SOCKS5 proxy applied via --yt-dlp-args: {proxy}")
         else:
-            # HTTP/HTTPS proxy: use spotdl's native --proxy flag
-            cmd.extend(["--proxy", proxy])
             print(f"[PROXY] HTTP proxy applied via --proxy: {proxy}")
 
     # Multi-value flags
@@ -294,16 +286,19 @@ def check_install():
         if check_module(python_exe, "socks"):
             info["pysocks"] = True
 
-    try:
-        result = subprocess.run(
-            ["ffmpeg", "-version"], capture_output=True, text=True, timeout=5,
-            encoding="utf-8", errors="replace",
-        )
-        info["ffmpeg"] = result.returncode == 0
-        if info["ffmpeg"]:
-            info["ffmpeg_version"] = result.stdout.strip().split("\n")[0]
-    except Exception:
-        pass
+        # Use shared ffmpeg detection (system PATH + imageio-ffmpeg fallback)
+        ff = find_ffmpeg(python_exe)
+        if ff:
+            info["ffmpeg"] = True
+            try:
+                result = subprocess.run(
+                    [ff, "-version"], capture_output=True, text=True, timeout=5,
+                    encoding="utf-8", errors="replace",
+                )
+                if result.returncode == 0:
+                    info["ffmpeg_version"] = result.stdout.strip().split("\n")[0]
+            except Exception:
+                pass
 
     print(json.dumps(info, indent=2, ensure_ascii=False))
 

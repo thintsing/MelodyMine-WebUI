@@ -486,6 +486,23 @@ def is_socks_proxy(proxy_url):
     )
 
 
+def build_spotdl_proxy_args(proxy):
+    """Return spotdl CLI args for a proxy URL.
+
+    spotDL only accepts HTTP/HTTPS in --proxy. For SOCKS5 proxies we must
+    use --yt-dlp-args instead, which yt-dlp reads directly.
+
+    Returns a list of CLI tokens, e.g. ["--proxy", "http://..."] or
+    ["--yt-dlp-args", "--proxy socks5://..."]. Empty list if no proxy.
+    Shared by music_helper._build_spotdl_cmd and spotify_helper.run_spotdl.
+    """
+    if not proxy:
+        return []
+    if is_socks_proxy(proxy):
+        return ["--yt-dlp-args", f"--proxy {proxy}"]
+    return ["--proxy", proxy]
+
+
 def proxy_to_env(proxy_url):
     """Convert proxy URL to environment variables for Python requests."""
     if is_socks_proxy(proxy_url):

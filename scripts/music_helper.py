@@ -28,10 +28,10 @@ from pathlib import Path
 from melodymine_common import (
     BILI_UA,
     DEFAULT_OUTPUT,
-    DEP_COMPAT,
     PROXY_PLATFORMS,
     SPOTIFY_RE,
     auto_select_platform,
+    build_spotdl_proxy_args,
     check_module,
     check_version_compat,
     debug_log,
@@ -131,11 +131,7 @@ def _build_spotdl_cmd(python, url, output, fmt, bitrate=None, proxy=None):
     ]
     if bitrate:
         cmd.extend(["--bitrate", str(bitrate)])
-    if proxy:
-        if proxy.startswith("socks5"):
-            cmd.extend(["--yt-dlp-args", f"--proxy {proxy}"])
-        else:
-            cmd.extend(["--proxy", proxy])
+    cmd.extend(build_spotdl_proxy_args(proxy))
     return cmd
 
 
