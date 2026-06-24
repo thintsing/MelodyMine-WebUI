@@ -80,7 +80,7 @@ def _emit_json(payload):
 
 
 def _download_plan(
-    query, platform="auto", fmt="flac", output=None, proxy=None, bitrate=None,
+    query, platform="auto", fmt="mp3", output=None, proxy=None, bitrate=None,
     index=1, embed_thumbnail=True, no_metadata=False, cookies=None,
 ):
     """Build a side-effect-free execution plan for dry-run and JSON reporting."""
@@ -1013,7 +1013,7 @@ def _ytdlp_download(
 
 # ─── Bilibili API Direct Download (Tier 2: bypasses yt-dlp 412) ──────────
 
-def _bili_api_download(bvid, output, fmt="flac", bitrate=None, search_query="", python=None):
+def _bili_api_download(bvid, output, fmt="mp3", bitrate=None, search_query="", python=None):
     """Download audio directly from Bilibili's playurl API, bypassing yt-dlp entirely."""
     if python is None:
         python, _ = _find_music_python()
@@ -1312,7 +1312,7 @@ def cmd_search(query, platform="auto", limit=5, proxy=None):
 
 
 def cmd_download(
-    query, platform="auto", fmt="flac", output=None,
+    query, platform="auto", fmt="mp3", output=None,
     proxy=None, bitrate=None, index=1, embed_thumbnail=True,
     no_metadata=False, cookies=None, dry_run=False, json_output=False,
 ):
@@ -1600,7 +1600,7 @@ Examples:
     p_dl = sub.add_parser("download", help="Download a song")
     p_dl.add_argument("query", help="Song name, artist, Spotify URL, or search query")
     p_dl.add_argument("--platform", default="auto", choices=["auto", "bilibili", "youtube"])
-    p_dl.add_argument("--format", default="flac", choices=["mp3", "flac", "m4a", "opus", "wav", "vorbis"])
+    p_dl.add_argument("--format", default="mp3", choices=["mp3", "flac", "m4a", "opus", "wav", "vorbis"])
     p_dl.add_argument("--output", default=None, help="Output dir (default: ~/Music/MelodyMine)")
     p_dl.add_argument("--proxy", default=None, help="Proxy for YouTube (e.g. socks5://host:port)")
     p_dl.add_argument("--cookies", default=None, help="cookies.txt path for YouTube sign-in/bot checks")
@@ -1608,7 +1608,7 @@ Examples:
     p_dl.add_argument("--index", type=int, default=1, help="Search result index (1-based)")
     p_dl.add_argument("--no-thumbnail", action="store_true")
     p_dl.add_argument("--no-metadata", action="store_true",
-                      help="Skip metadata enhancement (NetEase lookup + ID3 tags + rename)")
+                      help="Skip metadata enhancement (multi-source lookup + ID3 tags + rename)")
     p_dl.add_argument("--dry-run", action="store_true",
                       help="Print the command that would run without executing")
     p_dl.add_argument("--json", action="store_true",

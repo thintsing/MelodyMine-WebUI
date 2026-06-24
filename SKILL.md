@@ -116,7 +116,7 @@ python scripts/music_helper.py download "Artist Song" --cookies "/path/to/cookie
 - `--bitrate RATE`: for example `320K` or `128K`.
 - `--index N`: 1-based search result index.
 - `--no-thumbnail`: skip cover embedding.
-- `--no-metadata`: skip NetEase lookup, ID3 cleanup, and file rename.
+- `--no-metadata`: skip multi-source metadata lookup, ID3 cleanup, and file rename.
 - `--dry-run`: print the command that would run without executing.
 - `--json`: output machine-readable JSON (use with `--dry-run` or after a successful download).
 
