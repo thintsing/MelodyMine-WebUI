@@ -176,6 +176,17 @@ MelodyMine/
     └── config.md             # spotDL config reference
 ```
 
+## Disclaimer
+
+MelodyMine is for **personal learning and archival use only**. Downloading copyrighted audio may be illegal in your jurisdiction regardless of intent. Do not distribute, share, or monetize downloaded files. You are solely responsible for complying with your local laws and the terms of service of Bilibili, YouTube, and Spotify.
+
+This project:
+- does not host, store, or transmit any copyrighted content,
+- does not bypass digital rights management (DRM),
+- is not affiliated with or endorsed by Bilibili, YouTube, Spotify, NetEase, Apple, or MusicBrainz.
+
+If you are a rights holder and believe this tool facilitates infringement, open an issue. The maintainers will cooperate.
+
 ## License
 
 MIT. See `LICENSE`.

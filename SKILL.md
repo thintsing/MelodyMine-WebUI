@@ -130,14 +130,22 @@ python scripts/music_helper.py download "Artist Song" --cookies "/path/to/cookie
 
 ## Error Handling
 
-| Symptom | Action |
+Execute the first matching row. Do not explain the table to the user — just run the recovery action and report the outcome.
+
+| Symptom (match against stderr/output) | Recovery action (run this, don't just suggest it) |
 | --- | --- |
-| Bilibili `412 Precondition Failed` | Retry after a few seconds; the helper already retries once. |
-| YouTube timeout or unreachable | Retry with `--proxy socks5://HOST:PORT` if the user can provide one. |
-| YouTube asks to sign in or confirms bot detection | Ask for a cookies.txt file and retry with `--cookies PATH`. |
-| Spotify `KeyError: 'uri'` | Retry by searching the song name instead of using the Spotify URL, or use `spotify_helper.py` with `--use-official-api` if credentials/auth are available. |
-| No results | Broaden the query, try artist + title, or force the other platform. |
-| Download succeeds but metadata is wrong | Retry with `--no-metadata`, or use a more exact `Artist Song` query. |
+| `412 Precondition Failed` during Bilibili download | The helper already retries once and falls back to Bilibili API direct, then YouTube. If all tiers failed, tell the user Bilibili is rate-limiting and retry the same command after 10s. |
+| YouTube `timeout` / `unreachable` / connection refused | Ask the user for a proxy, then retry: `download "<query>" --proxy socks5://HOST:PORT`. Do not retry without a proxy if the first attempt already timed out. |
+| YouTube `Sign in to confirm you're not a bot` | Ask the user to export cookies.txt (e.g. via "Get cookies.txt" browser extension for YouTube), then retry: `download "<query>" --cookies /path/cookies.txt`. |
+| Spotify `KeyError: 'uri'` | Extract the track name from the Spotify URL or ask the user for it, then download by name instead: `download "Artist Song"`. Do not retry the same Spotify URL. |
+| `No results` on any platform | Try: (1) `Artist Title` format, (2) force the other platform via `--platform`, (3) broaden the query. Try up to 2 variants before reporting failure to the user. |
+| Download succeeds but `metadata is wrong` | Retry once with `--no-metadata` to at least fix the filename, then offer the user a manual retry with a more exact `Artist Song` query. |
+| `spotdl` not installed / install failed | Fall back to searching the song name via `download "Artist Song"` (Bilibili/YouTube path). Do not block on spotDL. |
+
+General rules:
+- If a recovery action needs information from the user (proxy, cookies, track name), ask once, then proceed.
+- If the same error recurs after the recovery action, stop and report the raw error to the user — do not loop.
+- Never silently retry the identical failing command more than twice.
 
 ## Reporting
 
