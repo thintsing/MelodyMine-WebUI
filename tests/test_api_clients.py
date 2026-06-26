@@ -10,6 +10,7 @@ import os
 import sys
 import tempfile
 import unittest
+import urllib.error
 from unittest.mock import patch, MagicMock, mock_open
 
 _SCRIPTS = os.path.join(os.path.dirname(__file__), "..", "scripts")
@@ -38,9 +39,20 @@ def _mock_urlopen(json_data=None, text_data=None, status=200, headers=None):
 
 class TestBiliClient(unittest.TestCase):
 
-    @patch("urllib.request.urlopen")
-    def test_search_success(self, mock_urlopen):
-        nav_data = {
+    def setUp(self):
+        # Reset WBI cache so each test starts fresh
+        bili_client._WBI_CACHE["ik"] = None
+        bili_client._WBI_CACHE["sk"] = None
+        bili_client._WBI_CACHE["ts"] = 0
+        # Mock _search_plain to return empty (avoids fallback side effects)
+        self._plain_patcher = patch.object(bili_client, "_search_plain", return_value=[])
+        self._plain_patcher.start()
+
+    def tearDown(self):
+        self._plain_patcher.stop()
+
+    def _nav_data(self):
+        return {
             "data": {
                 "wbi_img": {
                     "img_url": "https://i0.hdslb.com/bfs/wbi/abcdefghijklmnopqrstuvwxyz123456.png",
@@ -48,6 +60,9 @@ class TestBiliClient(unittest.TestCase):
                 }
             }
         }
+
+    @patch("urllib.request.urlopen")
+    def test_search_success(self, mock_urlopen):
         search_data = {
             "code": 0,
             "data": {
@@ -59,9 +74,9 @@ class TestBiliClient(unittest.TestCase):
                 ]
             }
         }
-        # First call = nav, second call = search
+        # nav call + search call = 2 urlopen calls
         mock_urlopen.side_effect = [
-            _mock_urlopen(json_data=nav_data),
+            _mock_urlopen(json_data=self._nav_data()),
             _mock_urlopen(json_data=search_data),
         ]
         results = bili_client.search("周杰伦", limit=2)
@@ -72,17 +87,10 @@ class TestBiliClient(unittest.TestCase):
 
     @patch("urllib.request.urlopen")
     def test_search_api_error(self, mock_urlopen):
-        nav_data = {
-            "data": {
-                "wbi_img": {
-                    "img_url": "https://i0.hdslb.com/bfs/wbi/abcdefghijklmnopqrstuvwxyz123456.png",
-                    "sub_url": "https://i0.hdslb.com/bfs/wbi/654321zyxwvutsrqponmlkjihgfedcba.png",
-                }
-            }
-        }
         error_data = {"code": -1, "message": "rate limit"}
+        # nav succeeds, search returns error (code != 0 → no retry for code -1)
         mock_urlopen.side_effect = [
-            _mock_urlopen(json_data=nav_data),
+            _mock_urlopen(json_data=self._nav_data()),
             _mock_urlopen(json_data=error_data),
         ]
         results = bili_client.search("test", limit=2)
@@ -90,9 +98,62 @@ class TestBiliClient(unittest.TestCase):
 
     @patch("urllib.request.urlopen")
     def test_search_network_error(self, mock_urlopen):
+        # All urlopen calls raise OSError
         mock_urlopen.side_effect = OSError("Connection failed")
         results = bili_client.search("test", limit=2)
         self.assertEqual(results, [])
+
+    @patch("urllib.request.urlopen")
+    def test_search_412_retry_then_succeed(self, mock_urlopen):
+        search_data = {
+            "code": 0,
+            "data": {
+                "result": [
+                    {"bvid": "BV1zz", "aid": 789, "title": "Test Song",
+                     "duration": "3:00", "play": 500, "author": "Artist"},
+                ]
+            }
+        }
+        # First attempt: nav succeeds, search returns 412 → retry
+        # Second attempt: nav cached, search succeeds
+        nav_resp = _mock_urlopen(json_data=self._nav_data())
+        err_resp = MagicMock()
+        err_resp.__enter__.return_value = err_resp
+        err_resp.read.side_effect = urllib.error.HTTPError(
+            "https://api.bilibili.com/x/web-interface/search/type", 412,
+            "Precondition Failed", {}, None
+        )
+        ok_resp = _mock_urlopen(json_data=search_data)
+
+        mock_urlopen.side_effect = [nav_resp, err_resp, ok_resp]
+
+        results = bili_client.search("test", limit=1)
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]["bvid"], "BV1zz")
+
+    @patch("urllib.request.urlopen")
+    def test_search_plain_fallback(self, mock_urlopen):
+        """When WBI search fails after retries, _search_plain is tried."""
+        self._plain_patcher.stop()  # Remove the mock for this test
+
+        plain_data = {
+            "results": [
+                {"bvid": "BV1aa", "aid": 111, "title": "Fallback Song",
+                 "duration": "2:30", "play": 100, "author": "Fallback Artist"},
+            ]
+        }
+        # All WBI retries fail with OSError, then plain search succeeds
+        mock_urlopen.side_effect = [
+            OSError("timeout"),   # WBI nav retry 1
+            OSError("timeout"),   # WBI nav retry 2
+            OSError("timeout"),   # WBI nav retry 3
+            _mock_urlopen(json_data=plain_data),  # plain search succeeds
+        ]
+        results = bili_client.search("test", limit=1)
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]["bvid"], "BV1aa")
+        self.assertEqual(results[0]["title"], "Fallback Song")
+        self._plain_patcher.start()  # Restore mock for other tests
 
 
 class TestNeteaseClient(unittest.TestCase):
