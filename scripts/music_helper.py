@@ -49,6 +49,7 @@ from melodymine_common import (
     needs_proxy,
     pip_install,
     proxy_to_env,
+    run_python_script,
     run_streaming,
     sanitize_filename,
     set_debug,
@@ -354,20 +355,13 @@ def bili_search(query, limit=5, python=None):
         print("  [!] No Python with requests found")
         return []
 
-    env = os.environ.copy()
-    env["PYTHONIOENCODING"] = "utf-8"
-
     for attempt in range(2):  # max 2 attempts
         if attempt > 0:
             print("  [*] Retrying in 2s...")
             time.sleep(2)
 
         try:
-            result = subprocess.run(
-                [python, "-c", _BILI_SEARCH_SCRIPT, query, str(limit)],
-                capture_output=True, text=True, timeout=30,
-                env=env, encoding="utf-8", errors="replace",
-            )
+            result = run_python_script(python, _BILI_SEARCH_SCRIPT, [query, str(limit)], timeout=30)
         except subprocess.TimeoutExpired:
             if attempt == 0:
                 continue
@@ -541,19 +535,13 @@ def musicbrainz_lookup(query, python=None, limit=5):
         python, _ = _find_music_python()
     if not python:
         return []
-    env = os.environ.copy()
-    env["PYTHONIOENCODING"] = "utf-8"
     parts = query.strip().split(None, 1)
     if len(parts) >= 2:
         mb_query = f'artist:"{parts[0]}" AND recording:"{parts[1]}" AND NOT (cover OR remix OR karaoke OR live OR tribute OR instrumental OR edit)'
     else:
         mb_query = f'recording:"{parts[0]}" AND NOT (cover OR remix OR karaoke OR live OR tribute)'
     try:
-        result = subprocess.run(
-            [python, "-c", _MB_SEARCH_SCRIPT, mb_query, str(limit)],
-            capture_output=True, text=True, timeout=30,
-            env=env, encoding="utf-8", errors="replace",
-        )
+        result = run_python_script(python, _MB_SEARCH_SCRIPT, [mb_query, str(limit)], timeout=30)
     except Exception:
         return []
     stdout = result.stdout.strip()
@@ -658,15 +646,8 @@ def metadata_lookup(query, python=None, limit=3):
     if not python:
         return []
 
-    env = os.environ.copy()
-    env["PYTHONIOENCODING"] = "utf-8"
-
     try:
-        result = subprocess.run(
-            [python, "-c", _NETEASE_SEARCH_SCRIPT, query, str(limit)],
-            capture_output=True, text=True, timeout=15,
-            env=env, encoding="utf-8", errors="replace",
-        )
+        result = run_python_script(python, _NETEASE_SEARCH_SCRIPT, [query, str(limit)], timeout=15)
     except Exception:
         return []
 
@@ -732,14 +713,8 @@ def resolve_netease_url(url, python=None):
     if not python:
         return None
 
-    env = os.environ.copy()
-    env["PYTHONIOENCODING"] = "utf-8"
     try:
-        result = subprocess.run(
-            [python, "-c", _NETEASE_DETAIL_SCRIPT, song_id],
-            capture_output=True, text=True, timeout=15,
-            env=env, encoding="utf-8", errors="replace",
-        )
+        result = run_python_script(python, _NETEASE_DETAIL_SCRIPT, [song_id], timeout=15)
     except Exception:
         return None
 
@@ -901,14 +876,8 @@ def download_cover(url, python=None):
         python, _ = _find_music_python()
     if not python:
         return None
-    env = os.environ.copy()
-    env["PYTHONIOENCODING"] = "utf-8"
     try:
-        result = subprocess.run(
-            [python, "-c", _COVER_DOWNLOAD_SCRIPT, url],
-            capture_output=True, text=True, timeout=15,
-            env=env, encoding="utf-8", errors="replace",
-        )
+        result = run_python_script(python, _COVER_DOWNLOAD_SCRIPT, [url], timeout=15)
         path = result.stdout.strip()
         if path and os.path.isfile(path):
             return path
@@ -1024,6 +993,11 @@ def _score_metadata_candidate(r, artist, title, *, collaboration_aware=False, bo
     - bonus_fields: for iTunes, adds small bonuses for having cover art and
       an album name.
     """
+    # Guard: empty query artist/title can never produce a meaningful match.
+    # (Python's ``"" in "anything"`` is always True — a phantom match.)
+    if not artist or not title:
+        return 0
+
     r_artist_raw = r.get("artist") or ""
     if collaboration_aware:
         r_artist = _clean_artist(r_artist_raw)

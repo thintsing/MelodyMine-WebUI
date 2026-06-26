@@ -22,15 +22,20 @@ sys.path.insert(0, os.path.abspath(_SCRIPTS))
 
 from melodymine_common import (  # noqa: E402
     auto_select_platform,
+    build_spotdl_proxy_args,
+    check_version_compat,
     derive_query_from_filename,
     extract_netease_song_id,
     is_bandcamp_url,
     is_chinese,
     is_direct_download_url,
     is_netease_url,
+    is_socks_proxy,
     is_soundcloud_url,
     is_spotify_url,
     is_youtube_url,
+    make_subprocess_env,
+    proxy_to_env,
     sanitize_filename,
 )
 from music_helper import (  # noqa: E402
@@ -641,6 +646,25 @@ class TestScoreMetadataCandidate(unittest.TestCase):
         # Artist exact: 20; title (None→""): "" in "稻香" is True → +2
         self.assertEqual(score, 22)
 
+    # ── Empty query guard (regression: "" in "anything" is True) ──
+    def test_empty_artist_in_query_returns_zero(self):
+        score = _score_metadata_candidate(
+            self._mk("周杰伦", "稻香"), "", "稻香",
+        )
+        self.assertEqual(score, 0)
+
+    def test_empty_title_in_query_returns_zero(self):
+        score = _score_metadata_candidate(
+            self._mk("周杰伦", "稻香"), "周杰伦", "",
+        )
+        self.assertEqual(score, 0)
+
+    def test_both_empty_in_query_returns_zero(self):
+        score = _score_metadata_candidate(
+            self._mk("周杰伦", "稻香"), "", "",
+        )
+        self.assertEqual(score, 0)
+
 
 class TestBestMetadataCandidate(unittest.TestCase):
     """_best_metadata_candidate: picks the highest-scoring result."""
@@ -674,6 +698,146 @@ class TestBestMetadataCandidate(unittest.TestCase):
         # collab_aware: first result gets 5+5=10, second gets 20+5=25
         self.assertEqual(data["artist"], "周杰伦")
         self.assertGreater(score, 10)
+
+
+# ═════════════════════════════════════════════════════════════════════════
+#  melodymine_common pure-function tests (check_version_compat,
+#  build_spotdl_proxy_args, proxy_to_env, is_socks_proxy,
+#  make_subprocess_env)
+# ═════════════════════════════════════════════════════════════════════════
+
+
+class TestCheckVersionCompat(unittest.TestCase):
+    """check_version_compat: version-to-matrix comparisons."""
+
+    def test_exact_tested_version_ok(self):
+        status, msg = check_version_compat("yt_dlp", "2026.06.09")
+        self.assertEqual(status, "ok")
+        self.assertEqual(msg, "")
+
+    def test_above_min_but_untested_warns(self):
+        status, msg = check_version_compat("yt_dlp", "2025.07.01")
+        self.assertEqual(status, "warn")
+        self.assertIn("tested", msg)
+
+    def test_below_min_for_ytdlp(self):
+        status, msg = check_version_compat("yt_dlp", "2023.12.01")
+        self.assertEqual(status, "warn")  # severity is "warn" for yt-dlp
+        self.assertIn("below minimum", msg)
+
+    def test_spotdl_above_max_major_errors(self):
+        status, msg = check_version_compat("spotdl", "5.0.0")
+        self.assertEqual(status, "error")
+        self.assertIn("above major", msg)
+
+    def test_spotdl_below_min_errors(self):
+        status, msg = check_version_compat("spotdl", "4.0.0")
+        self.assertEqual(status, "error")
+        self.assertIn("below minimum", msg)
+
+    def test_spotdl_ok_version(self):
+        status, msg = check_version_compat("spotdl", "4.5.0")
+        self.assertEqual(status, "ok")
+        self.assertEqual(msg, "")
+
+    def test_unknown_module_ok(self):
+        status, msg = check_version_compat("nonexistent", "1.0")
+        self.assertEqual(status, "ok")
+        self.assertEqual(msg, "")
+
+    def test_none_version_ok(self):
+        status, msg = check_version_compat("yt_dlp", None)
+        self.assertEqual(status, "ok")
+        self.assertEqual(msg, "")
+
+    def test_prerelease_suffix(self):
+        # "2026.12.01-alpha" should parse as (2026, 12, 1)
+        status, _ = check_version_compat("yt_dlp", "2026.12.01-alpha")
+        self.assertIn(status, ("ok", "warn"))
+        self.assertNotEqual(status, "error")
+
+
+class TestBuildSpotdlProxyArgs(unittest.TestCase):
+    """build_spotdl_proxy_args: maps proxy to spotdl CLI tokens."""
+
+    def test_no_proxy_returns_empty(self):
+        self.assertEqual(build_spotdl_proxy_args(None), [])
+        self.assertEqual(build_spotdl_proxy_args(""), [])
+
+    def test_http_proxy_passed_directly(self):
+        self.assertEqual(
+            build_spotdl_proxy_args("http://127.0.0.1:8888"),
+            ["--proxy", "http://127.0.0.1:8888"],
+        )
+
+    def test_socks5_wraps_in_ytdlp_args(self):
+        self.assertEqual(
+            build_spotdl_proxy_args("socks5://127.0.0.1:1080"),
+            ["--yt-dlp-args", "--proxy socks5://127.0.0.1:1080"],
+        )
+
+    def test_socks5h_wraps_in_ytdlp_args(self):
+        self.assertEqual(
+            build_spotdl_proxy_args("socks5h://127.0.0.1:1080"),
+            ["--yt-dlp-args", "--proxy socks5h://127.0.0.1:1080"],
+        )
+
+
+class TestProxyToEnv(unittest.TestCase):
+    """proxy_to_env: maps proxy URL to env dict for requests."""
+
+    def test_http_proxy(self):
+        env = proxy_to_env("http://proxy:8080")
+        self.assertEqual(env, {"HTTP_PROXY": "http://proxy:8080", "HTTPS_PROXY": "http://proxy:8080"})
+
+    def test_socks5_proxy(self):
+        env = proxy_to_env("socks5://proxy:1080")
+        self.assertEqual(env, {"ALL_PROXY": "socks5://proxy:1080"})
+
+    def test_https_proxy(self):
+        env = proxy_to_env("https://proxy:443")
+        self.assertEqual(list(env.keys()), ["HTTP_PROXY", "HTTPS_PROXY"])
+
+
+class TestIsSocksProxy(unittest.TestCase):
+    """is_socks_proxy: detects SOCKS proxy schemes."""
+
+    def test_socks5(self):
+        self.assertTrue(is_socks_proxy("socks5://host:port"))
+
+    def test_socks5h(self):
+        self.assertTrue(is_socks_proxy("socks5h://host:port"))
+
+    def test_socks4(self):
+        self.assertTrue(is_socks_proxy("socks4://host:port"))
+
+    def test_http_is_not_socks(self):
+        self.assertFalse(is_socks_proxy("http://host:port"))
+        self.assertFalse(is_socks_proxy("https://host:port"))
+
+    def test_empty_is_not_socks(self):
+        self.assertFalse(is_socks_proxy(""))
+        self.assertFalse(is_socks_proxy(None))
+
+
+class TestMakeSubprocessEnv(unittest.TestCase):
+    """make_subprocess_env: returns os.environ with PYTHONIOENCODING set."""
+
+    def test_has_utf8_encoding(self):
+        env = make_subprocess_env()
+        self.assertEqual(env.get("PYTHONIOENCODING"), "utf-8")
+
+    def test_does_not_mutate_original(self):
+        original_encoding = os.environ.get("PYTHONIOENCODING")
+        env = make_subprocess_env()
+        env["PYTHONIOENCODING"] = "corrupted"
+        # Original os.environ should be untouched.
+        self.assertEqual(os.environ.get("PYTHONIOENCODING"), original_encoding)
+
+    def test_includes_existing_keys(self):
+        env = make_subprocess_env()
+        self.assertIn("PATH", env)
+        self.assertIn("SYSTEMROOT" if os.name == "nt" else "HOME", env)
 
 
 if __name__ == "__main__":

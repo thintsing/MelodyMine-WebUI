@@ -607,6 +607,43 @@ def derive_query_from_filename(filepath):
     return base.strip()
 
 
+# ─── Subprocess helpers ───────────────────────────────────────────────────
+
+
+def make_subprocess_env():
+    """Return an ``os.environ`` copy with ``PYTHONIOENCODING=utf-8`` set.
+
+    Shared by every ``subprocess.run`` / ``Popen`` call in the project so
+    that the encoding boilerplate lives in one place.
+    """
+    env = os.environ.copy()
+    env["PYTHONIOENCODING"] = "utf-8"
+    return env
+
+
+def run_python_script(python, script, args=(), timeout=30):
+    """Run a Python inline script (``-c``) with consistent encoding and env.
+
+    Args:
+        python:  path to Python interpreter
+        script:  inline Python source (passed via ``-c``)
+        args:    iterable of positional arguments placed in ``sys.argv``
+        timeout: subprocess timeout in seconds
+
+    Returns:
+        ``subprocess.CompletedProcess``
+
+    Raises:
+        ``subprocess.TimeoutExpired`` on timeout; any ``OSError`` on spawn failure.
+    """
+    env = make_subprocess_env()
+    cmd = [python, "-c", script] + [str(a) for a in args]
+    return subprocess.run(
+        cmd, capture_output=True, text=True, timeout=timeout,
+        env=env, encoding="utf-8", errors="replace",
+    )
+
+
 # ─── Debug logging ───────────────────────────────────────────────────────
 
 DEBUG_LOG_DIR = os.path.join(HOME, ".melodymine")
