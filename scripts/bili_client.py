@@ -54,7 +54,7 @@ def search(query, limit=5, timeout=10):
     try:
         ik, sk = _get_wbi_keys(timeout=timeout)
     except Exception as e:
-        print(f"  [!] Bilibili wbi_key: {e}")
+        print(f"  [!] Bilibili wbi_key: {e}", file=sys.stderr)
         return []
 
     params = _wbi_sign(
@@ -70,14 +70,14 @@ def search(query, limit=5, timeout=10):
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             data = json.loads(resp.read().decode("utf-8"))
     except urllib.error.HTTPError as e:
-        print(f"  [!] Bilibili HTTP {e.code}: {e.reason}")
+        print(f"  [!] Bilibili HTTP {e.code}: {e.reason}", file=sys.stderr)
         return []
     except Exception as e:
-        print(f"  [!] Bilibili search: {e}")
+        print(f"  [!] Bilibili search: {e}", file=sys.stderr)
         return []
 
     if data.get("code") != 0:
-        print(f"  [!] Bilibili API: {data.get('message', 'unknown')}")
+        print(f"  [!] Bilibili API: {data.get('message', 'unknown')}", file=sys.stderr)
         return []
 
     results = []

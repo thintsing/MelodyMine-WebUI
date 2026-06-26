@@ -83,16 +83,15 @@ def detail(song_id, timeout=10):
 
 
 if __name__ == "__main__":
-    import sys as _sys
-    cmd = _sys.argv[1] if len(_sys.argv) > 1 else ""
-    if cmd == "search" and len(_sys.argv) >= 3:
-        q = _sys.argv[2]
-        n = int(_sys.argv[3]) if len(_sys.argv) > 3 else 3
+    cmd = sys.argv[1] if len(sys.argv) > 1 else ""
+    if cmd == "search" and len(sys.argv) >= 3:
+        q = sys.argv[2]
+        n = int(sys.argv[3]) if len(sys.argv) > 3 else 3
         print(json.dumps(search(q, limit=n), ensure_ascii=False))
-    elif cmd == "detail" and len(_sys.argv) >= 3:
-        sid = _sys.argv[2]
+    elif cmd == "detail" and len(sys.argv) >= 3:
+        sid = sys.argv[2]
         print(json.dumps(detail(sid), ensure_ascii=False))
     else:
         print("Usage: python netease_client.py search <query> [limit]")
         print("       python netease_client.py detail <song_id>")
-        _sys.exit(1)
+        sys.exit(1)

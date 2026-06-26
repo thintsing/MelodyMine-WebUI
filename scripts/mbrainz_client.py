@@ -51,8 +51,12 @@ def lookup(query, limit=5, timeout=15):
 
 
 def _resolve_cover(release_mbid, timeout=10):
-    """Fetch cover art URL for a release MBID from Cover Art Archive."""
-    for size in ["front-500", "front"]:
+    """Fetch cover art URL for a release MBID from Cover Art Archive.
+
+    Requests the 600x600 front image; falls back to the 500px version only
+    if the larger size is unavailable.
+    """
+    for size in ["front-600", "front"]:
         time.sleep(0.3)
         try:
             ca_req = urllib.request.Request(

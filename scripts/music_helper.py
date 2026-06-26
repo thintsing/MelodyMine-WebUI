@@ -1275,7 +1275,7 @@ def cmd_search(query, platform="auto", limit=5, proxy=None):
 
     if platform == "bilibili":
         # Use wbi API search (more reliable than yt-dlp's bilisearch)
-        results = bili_search(query, limit=limit)
+        results = bili_client.search(query, limit=limit)
         if results:
             results = rank_bili_results(results)
             for i, r in enumerate(results, 1):
@@ -1468,7 +1468,7 @@ def cmd_download(
 
         # Step 1: wbi search
         print("[1/3] Searching Bilibili...")
-        results = bili_search(query, limit=max(index, 5), python=py)
+        results = bili_client.search(query, limit=max(index, 5))
         if not results:
             print("\n  Bilibili search failed (rate-limited or network issue).")
             print("  Falling back to YouTube...")
