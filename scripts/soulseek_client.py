@@ -8,7 +8,7 @@ Credentials: read from SLSK_USERNAME / SLSK_PASSWORD env vars by default,
 Usage:
     import soulseek_client
     results = soulseek_client.search("Air Supply flac")
-    soulseek_client.download("username", "file_path", "output_dir")
+    soulseek_client.download("username", "remote_file_path", "output_dir")
 """
 
 import asyncio
@@ -17,7 +17,17 @@ import sys
 import time
 
 from aioslsk.client import SoulSeekClient
-from aioslsk.settings import Settings, CredentialsSettings, NetworkSettings
+from aioslsk.settings import Settings, CredentialsSettings, NetworkSettings, SharesSettings, ListeningSettings
+from aioslsk.transfer.model import Transfer as SlskTransfer
+from aioslsk.transfer.state import TransferState
+
+
+class _NoopTransferCache:
+    """Minimal TransferCache implementation (no persistence)."""
+    def read(self) -> list[SlskTransfer]:
+        return []
+    def write(self, transfers: list[SlskTransfer]):
+        pass
 
 
 def _get_creds(username=None, password=None):
@@ -29,11 +39,30 @@ def _get_creds(username=None, password=None):
     return username, password
 
 
+def _state_val(state_obj):
+    """Get the VALUE enum from a TransferState object for comparisons."""
+    return getattr(state_obj, 'VALUE', TransferState.UNSET)
+
+
+def _ext_guard(item):
+    """Get file extension from a FileData item, falling back to filename parsing."""
+    ext = getattr(item, "extension", None)
+    if ext:
+        return ext
+    fn = getattr(item, "filename", "")
+    if "." in fn:
+        return fn.rsplit(".", 1)[-1].lower()
+    return ""
+
+
 async def _async_search(query, username, password, wait=15):
     """Async Soulseek search. Returns list of (username, FileData) tuples."""
     settings = Settings(
         credentials=CredentialsSettings(username=username, password=password),
-        network=NetworkSettings(enable_upnp=False, listen_port=0),
+        network=NetworkSettings(
+            listening=ListeningSettings(port=0, obfuscated_port=0, error_mode='any'),
+            upnp={'enable': False},
+        ),
     )
     client = SoulSeekClient(settings)
     await client.start()
@@ -41,7 +70,6 @@ async def _async_search(query, username, password, wait=15):
 
     req = await client.searches.search(query)
 
-    # Wait for results
     for i in range(wait):
         await asyncio.sleep(1)
         if len(req.results) > 0 and len(req.results) % 20 == 0:
@@ -64,6 +92,9 @@ def search(query, username=None, password=None, wait=15, max_results=50):
                 "filesize": 60000000,
                 "extension": "flac",
                 "shared_items_count": 1,
+                "has_free_slots": True,
+                "avg_speed": 100.0,
+                "queue_size": 0,
             },
             ...
         ]
@@ -89,7 +120,7 @@ def search(query, username=None, password=None, wait=15, max_results=50):
                 "username": r.username,
                 "filename": item.filename,
                 "filesize": item.filesize,
-                "extension": item.extension,
+                "extension": _ext_guard(item),
                 "shared_items_count": len(r.shared_items),
                 "has_free_slots": r.has_free_slots,
                 "avg_speed": r.avg_speed,
@@ -105,40 +136,75 @@ def search(query, username=None, password=None, wait=15, max_results=50):
     return flat
 
 
-async def _async_download(username, password, target_user, remote_path, output_dir):
+async def _async_download(username, password, target_user, remote_path, output_dir, timeout_secs=120):
     """Async download a single file from a Soulseek user."""
+    os.makedirs(output_dir, exist_ok=True)
+
     settings = Settings(
         credentials=CredentialsSettings(username=username, password=password),
-        network=NetworkSettings(enable_upnp=False, listen_port=0),
+        network=NetworkSettings(
+            listening=ListeningSettings(port=0, obfuscated_port=0, error_mode='any'),
+            upnp={'enable': False},
+        ),
+        shares=SharesSettings(download=output_dir),
     )
     client = SoulSeekClient(settings)
     await client.start()
     await client.login()
 
+    # Set up transfer manager
+    transfer_mgr = client.create_transfer_manager(_NoopTransferCache())
+    await transfer_mgr.start()
+
     # Find the filename for display
     filename = remote_path.rsplit("\\", 1)[-1].rsplit("/", 1)[-1]
-    out_path = os.path.join(output_dir, filename)
-
     print(f"  Downloading from {target_user}: {filename}")
-    print(f"  -> {out_path}")
 
     try:
-        # Request file transfer from user
-        start = time.time()
-        download = await client.transfers.transfer_file(
-            target_user, remote_path, out_path
-        )
-        elapsed = time.time() - start
-        # Wait for transfer to complete
-        await download.wait_complete()
-        print(f"  Downloaded {os.path.getsize(out_path) / 1024 / 1024:.1f}MB in {elapsed:.0f}s")
-        success = True
-    except Exception as e:
-        print(f"  [!] Download failed: {e}")
-        success = False
+        transfer = await transfer_mgr.download(target_user, remote_path)
 
-    await client.stop()
-    return success, out_path if success else None
+        # Wait for completion
+        start = time.time()
+        success = False
+        while time.time() - start < timeout_secs:
+            await asyncio.sleep(1)
+
+            if transfer.is_transfered():
+                success = True
+                elapsed = time.time() - start
+                print(f"  Completed in {elapsed:.0f}s")
+                break
+
+            if _state_val(transfer.state) == TransferState.FAILED:
+                reason = transfer.fail_reason or "unknown"
+                print(f"  [!] Transfer failed: {reason}")
+                break
+
+            if _state_val(transfer.state) == TransferState.ABORTED:
+                reason = transfer.abort_reason or "aborted"
+                print(f"  [!] Transfer aborted: {reason}")
+                break
+
+        if not success:
+            if time.time() - start >= timeout_secs:
+                print(f"  [!] Timeout after {timeout_secs}s")
+            return False, None
+
+        local_path = transfer.local_path
+        if local_path and os.path.isfile(local_path):
+            size_mb = os.path.getsize(local_path) / (1024 * 1024)
+            print(f"  Downloaded: {size_mb:.1f} MB")
+            return True, local_path
+        else:
+            print(f"  [!] File not found at local path: {local_path}")
+            return False, None
+
+    except Exception as e:
+        print(f"  [!] Download error: {e}")
+        return False, None
+    finally:
+        await transfer_mgr.stop()
+        await client.stop()
 
 
 def download(target_user, remote_path, output_dir, username=None, password=None, timeout=120):
@@ -162,7 +228,7 @@ def download(target_user, remote_path, output_dir, username=None, password=None,
 
     try:
         success, path = asyncio.run(
-            _async_download(username, password, target_user, remote_path, output_dir)
+            _async_download(username, password, target_user, remote_path, output_dir, timeout)
         )
         return success, path
     except Exception as e:
