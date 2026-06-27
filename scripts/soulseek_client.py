@@ -44,6 +44,11 @@ def _state_val(state_obj):
     return getattr(state_obj, 'VALUE', TransferState.UNSET)
 
 
+def _safe(s):
+    """Strip non-printable Unicode control chars that crash Windows GBK terminals."""
+    return "".join(c for c in s if c.isprintable() or c == " ")
+
+
 def _ext_guard(item):
     """Get file extension from a FileData item, falling back to filename parsing."""
     ext = getattr(item, "extension", None)
@@ -158,7 +163,7 @@ async def _async_download(username, password, target_user, remote_path, output_d
 
     # Find the filename for display
     filename = remote_path.rsplit("\\", 1)[-1].rsplit("/", 1)[-1]
-    print(f"  Downloading from {target_user}: {filename}")
+    print(f"  Downloading from {_safe(target_user)}: {_safe(filename)}")
 
     try:
         transfer = await transfer_mgr.download(target_user, remote_path)
@@ -273,7 +278,7 @@ def download_best(candidates, output_dir, username=None, password=None, max_retr
             to = 120
 
         for attempt in range(max_retries):
-            print(f"  [{idx + 1}/{len(candidates)}] Trying {target_user}: {name} "
+            print(f"  [{idx + 1}/{len(candidates)}] Trying {_safe(target_user)}: {_safe(name)} "
                   f"(attempt {attempt + 1}/{max_retries})")
             ok, path = download(
                 target_user, remote_path, output_dir,
@@ -304,6 +309,6 @@ if __name__ == "__main__":
         print(f"\nFound {len(results)} results:")
         for r in results[:30]:
             name = r["filename"].rsplit("\\", 1)[-1].rsplit("/", 1)[-1]
-            print(f"  {r['username']:20s} | {r['filesize']/1024/1024:5.1f}MB | {name[:50]}")
+            print(f"  {_safe(r['username']):20s} | {r['filesize']/1024/1024:5.1f}MB | {_safe(name[:50])}")
     else:
         print(f"Unknown action: {action}")
