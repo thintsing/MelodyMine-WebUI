@@ -1651,14 +1651,16 @@ def _do_soulseek_download(
         print("  No suitable file found.")
         return {"ok": False, "platform": "soulseek", "error": "no file"}
 
-    # Show top candidates
+    # Show top candidates (sanitize invisible Unicode control chars for GBK terminals)
     print("  Top candidates:")
     for r in candidates[:8]:
         name = r["filename"].rsplit("\\", 1)[-1].rsplit("/", 1)[-1]
         sz = r["filesize"] / 1024 / 1024
         fmt_char = {"flac": "F", "mp3": "M"}.get(r["extension"], "?")
         slot = "*" if r["has_free_slots"] else "Q"
-        print(f"    [{fmt_char}{slot}] {r['username']:20s} | {sz:5.1f}MB | {name[:55]}")
+        safe_user = "".join(c for c in r["username"] if c.isprintable() or c == " ")[:20]
+        safe_name = "".join(c for c in name if c.isprintable() or c == " ")[:55]
+        print(f"    [{fmt_char}{slot}] {safe_user:20s} | {sz:5.1f}MB | {safe_name}")
     print()
 
     print("[2/3] Trying candidates (multi-retry enabled)...")
