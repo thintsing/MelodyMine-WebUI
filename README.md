@@ -146,10 +146,10 @@ Options:
 
 | Input | Default Route | Notes |
 | --- | --- | --- |
-| Chinese query | Bilibili | No proxy expected. Falls back to YouTube if needed. |
-| English or non-Chinese query | YouTube | Try direct first; add proxy after network failure. |
+| Chinese query | Soulseek → Bilibili → YouTube | Soulseek first for lossless P2P (~30s timeout), then Bilibili, then YouTube. Use `--quick` to skip Soulseek. |
+| English or non-Chinese query | Soulseek → YouTube | Soulseek first for lossless P2P, then YouTube. Use `--quick` to skip Soulseek. |
 | Spotify URL | spotDL | Auto-installs spotDL on first use if possible. |
-| NetEase URL (`music.163.com`) | NetEase direct → Bilibili/YouTube | Song name extracted via NetEase API. Tries NetEase CDN direct download first (free songs), falls back to Bilibili/YouTube if copyrighted. |
+| NetEase URL (`music.163.com`) | NetEase direct → Bilibili/YouTube | Song name resolved via NetEase API. Tries NetEase CDN direct download first (free songs), falls back to Bilibili/YouTube if copyrighted. |
 | YouTube/SoundCloud/Bandcamp URL | yt-dlp direct | No search step — downloads the URL directly. YouTube may need `--proxy`. |
 | Soulseek P2P (`--platform soulseek`) | Soulseek network | Searches direct from sharers. Requires `SLSK_USERNAME` and `SLSK_PASSWORD` env vars. Downloads via single persistent session with multi-candidate retry. Auto-fallback after YouTube. Proxy auto-detected from `ALL_PROXY`/`HTTP_PROXY` env vars or common Clash ports (7897/7890/1080); proxies all connections (server + peer). |
 | Chinese query → YouTube fail → Soulseek | Auto-fallback | When Bilibili & YouTube both fail, Soulseek is tried automatically. |

@@ -15,11 +15,9 @@ import asyncio
 import os
 import sys
 import time
-import json
-from urllib.parse import urlparse
 
 # Proxy auto-detection is now unified in melodymine_common.
-from melodymine_common import detect_proxy as _detect_proxy
+from melodymine_common import detect_proxy as _detect_proxy, debug_log
 
 
 def _build_proxied_socket(dest_host, dest_port, proxy_url, timeout=30):
@@ -326,7 +324,7 @@ class _SoulseekSession:
         except Exception as e:
             print(f"  [!] Download error: {e}", flush=True)
             import traceback
-            traceback.print_exc()
+            debug_log(f"soulseek download error: {e}\n{traceback.format_exc()}")
             return False, None
 
 

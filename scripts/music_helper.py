@@ -1246,9 +1246,6 @@ def _download_netease_url(py, query, fmt, output, proxy, bitrate,
     )
 
 
-
-
-
 def _do_soulseek_download(
     query, output, fmt, bitrate, embed_thumbnail, no_metadata,
     slsk_user=None, slsk_pass=None,

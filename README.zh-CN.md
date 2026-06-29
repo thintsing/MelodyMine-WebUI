@@ -146,8 +146,8 @@ python scripts/music_helper.py meta "filepath" [options]
 
 | 输入 | 默认路由 | 说明 |
 | --- | --- | --- |
-| 中文查询 | Bilibili | 无需代理。如失败会回退到 YouTube。 |
-| 英文或非中文查询 | YouTube | 先尝试直连；网络失败后再使用代理。 |
+| 中文查询 | Soulseek → Bilibili → YouTube | 优先通过 Soulseek 获取无损 P2P 资源（约 30s 超时），次选 Bilibili，最后 YouTube。使用 `--quick` 可跳过 Soulseek。 |
+| 英文或非中文查询 | Soulseek → YouTube | 优先通过 Soulseek 获取无损 P2P 资源，次选 YouTube。使用 `--quick` 可跳过 Soulseek。 |
 | Spotify URL | spotDL | 首次使用时会自动安装 spotDL。 |
 | 网易云音乐 URL（`music.163.com`） | 网易云直连 → Bilibili/YouTube | 通过网易云 API 获取歌曲名。免费歌曲先尝试网易云 CDN 直连，版权受限时回退 Bilibili/YouTube。 |
 | YouTube/SoundCloud/Bandcamp URL | yt-dlp 直连 | 无需搜索，直接下载 URL。YouTube 可能需要 `--proxy`。 |

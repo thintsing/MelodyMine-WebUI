@@ -117,7 +117,6 @@ To disable auto-loading:
 
 spotDL ships with public credentials that work for most users. For heavy usage or private
 playlists, create your own at https://developer.spotify.com/dashboard:
-playlists, create your own at https://developer.spotify.com/dashboard:
 
 1. Create app → set redirect URI to `http://localhost:8080`
 2. Copy Client ID and Client Secret

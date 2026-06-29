@@ -43,3 +43,9 @@ cookies.txt
 
 # WorkBuddy internal
 .workbuddy/
+
+# Pytest cache
+.pytest_cache/
+
+# CodeBuddy project data
+.codebuddy/
