@@ -3,1267 +3,1280 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#0a0814">
 <title>MelodyMine — Music Downloader</title>
 <style>
 /* ═══════════════════════════════════════════════════════════════════════════
-   MelodyMine Web UI — Design System v2
+   MelodyMine Web UI — Design System v3
+   "Every pixel matters."
    ═══════════════════════════════════════════════════════════════════════════ */
 
+/* ── Design Tokens ──────────────────────────────────────────────────────── */
 :root {
-  --bg-deep: #09090f;
-  --bg: #0f0f1a;
-  --surface: rgba(22, 22, 40, 0.7);
-  --surface-solid: #1a1a30;
-  --border: rgba(255, 255, 255, 0.06);
-  --border-hover: rgba(255, 255, 255, 0.14);
-  --text: #e8e8f0;
-  --text-dim: #9090a8;
-  --text-muted: #606078;
+  /* Depth layers */
+  --bg-root: #07050e;
+  --bg-elevated: #0c0a16;
+  --bg-surface: rgba(18, 15, 32, 0.75);
+  --bg-surface-hover: rgba(24, 20, 44, 0.8);
+  --bg-input: rgba(255, 255, 255, 0.025);
+  --bg-input-focus: rgba(139, 92, 246, 0.04);
+
+  /* Glass layers */
+  --glass-1: rgba(22, 18, 38, 0.6);
+  --glass-2: rgba(30, 24, 50, 0.55);
+  --glass-border: rgba(255, 255, 255, 0.055);
+  --glass-border-hover: rgba(255, 255, 255, 0.1);
+  --glass-border-focus: rgba(139, 92, 246, 0.35);
+
+  /* Typography */
+  --text: #eae6f5;
+  --text-secondary: #9c97ad;
+  --text-muted: #625e74;
+  --text-inverse: #0a0814;
+
+  /* Brand */
   --accent: #8b5cf6;
-  --accent-glow: rgba(139, 92, 246, 0.35);
-  --accent2: #a78bfa;
+  --accent-light: #a78bfa;
+  --accent-glow: rgba(139, 92, 246, 0.25);
+
+  /* Semantic */
+  --success: #34d399;
+  --success-glow: rgba(52, 211, 153, 0.2);
+  --error: #f87171;
+  --error-glow: rgba(248, 113, 113, 0.2);
+  --warning: #fbbf24;
+  --warning-glow: rgba(251, 191, 36, 0.18);
+  --info: #22d3ee;
+  --info-glow: rgba(34, 211, 238, 0.18);
   --pink: #ec4899;
-  --pink-glow: rgba(236, 72, 153, 0.3);
-  --cyan: #22d3ee;
-  --green: #34d399;
-  --green-glow: rgba(52, 211, 153, 0.25);
-  --red: #f87171;
-  --red-glow: rgba(248, 113, 113, 0.25);
-  --yellow: #fbbf24;
-  --radius-sm: 8px;
-  --radius: 14px;
-  --radius-lg: 20px;
-  --font: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --pink-glow: rgba(236, 72, 153, 0.2);
+
+  /* Radii */
+  --r-xs: 6px;
+  --r-sm: 10px;
+  --r-md: 14px;
+  --r-lg: 20px;
+  --r-xl: 24px;
+  --r-full: 9999px;
+
+  /* Shadows */
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.5);
+  --shadow-glow: 0 0 24px var(--accent-glow);
+
+  /* Motion */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --dur-fast: 150ms;
+  --dur-normal: 250ms;
+  --dur-slow: 400ms;
+
+  /* Typography scale */
+  --fs-xs: 0.7rem;
+  --fs-sm: 0.78rem;
+  --fs-base: 0.88rem;
+  --fs-md: 0.95rem;
+  --fs-lg: 1.15rem;
+  --fs-xl: 1.5rem;
+  --fs-2xl: 2rem;
+
+  /* Fonts */
+  --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
   --font-mono: 'JetBrains Mono', 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
-  --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.4);
-  --transition: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* Layout */
+  --header-h: auto;
+  --max-width: 1320px;
+  --gap: 16px;
 }
 
-* { margin: 0; padding: 0; box-sizing: border-box; }
-
+/* ── Reset ──────────────────────────────────────────────────────────────── */
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+html { font-size: 15px; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
 body {
-  font-family: var(--font);
-  background: var(--bg-deep);
+  font-family: var(--font-sans);
+  background: var(--bg-root);
   color: var(--text);
   min-height: 100vh;
   overflow-x: hidden;
-  -webkit-font-smoothing: antialiased;
+  line-height: 1.5;
+}
+a { color: var(--accent-light); text-decoration: none; }
+
+/* ── Noise Texture ──────────────────────────────────────────────────────── */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.025;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+  background-repeat: repeat;
+  background-size: 200px 200px;
 }
 
-/* ═══════════════════════════════════════════════════════════════════════════
-   Animated Background
-   ═══════════════════════════════════════════════════════════════════════════ */
-
-.bg-glow {
+/* ── Animated Background Orbs ───────────────────────────────────────────── */
+.bg-orb {
   position: fixed;
   border-radius: 50%;
-  filter: blur(120px);
-  opacity: 0.12;
+  filter: blur(140px);
+  opacity: 0.08;
   z-index: 0;
   pointer-events: none;
 }
-.bg-glow.g1 {
-  width: 600px; height: 600px;
-  background: var(--accent);
-  top: -200px; left: -100px;
-  animation: float1 20s ease-in-out infinite;
+.bg-orb--1 { width: 700px; height: 700px; background: var(--accent);  top: -15%; left: -10%; animation: orbFloat1 22s ease-in-out infinite; }
+.bg-orb--2 { width: 550px; height: 550px; background: var(--pink);    bottom: -12%; right: -8%; animation: orbFloat2 26s ease-in-out infinite; }
+.bg-orb--3 { width: 420px; height: 420px; background: var(--info);    top: 45%; left: 55%; animation: orbFloat3 19s ease-in-out infinite; }
+
+@keyframes orbFloat1 {
+  0%, 100% { transform: translate(0, 0) scale(1) rotate(0deg); }
+  33% { transform: translate(60px, 80px) scale(1.12) rotate(2deg); }
+  66% { transform: translate(-30px, -40px) scale(0.92) rotate(-1deg); }
 }
-.bg-glow.g2 {
-  width: 500px; height: 500px;
-  background: var(--pink);
-  bottom: -150px; right: -100px;
-  animation: float2 25s ease-in-out infinite;
+@keyframes orbFloat2 {
+  0%, 100% { transform: translate(0, 0) scale(1) rotate(0deg); }
+  33% { transform: translate(-70px, -50px) scale(1.08) rotate(-2deg); }
+  66% { transform: translate(40px, 30px) scale(0.88) rotate(1deg); }
 }
-.bg-glow.g3 {
-  width: 400px; height: 400px;
-  background: var(--cyan);
-  top: 50%; left: 50%;
-  transform: translate(-50%, -50%);
-  animation: float3 18s ease-in-out infinite;
+@keyframes orbFloat3 {
+  0%, 100% { transform: translate(-50%, -50%) scale(1) rotate(0deg); }
+  50% { transform: translate(-50%, -50%) scale(1.25) rotate(1.5deg); }
 }
 
-@keyframes float1 {
-  0%, 100% { transform: translate(0, 0) scale(1); }
-  33% { transform: translate(80px, 60px) scale(1.15); }
-  66% { transform: translate(-40px, -30px) scale(0.9); }
-}
-@keyframes float2 {
-  0%, 100% { transform: translate(0, 0) scale(1); }
-  33% { transform: translate(-60px, -80px) scale(1.1); }
-  66% { transform: translate(50px, 40px) scale(0.85); }
-}
-@keyframes float3 {
-  0%, 100% { transform: translate(-50%, -50%) scale(1); }
-  50% { transform: translate(-50%, -50%) scale(1.3); }
+/* ── Grid Background ────────────────────────────────────────────────────── */
+.bg-grid {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.03;
+  background-image:
+    linear-gradient(rgba(255,255,255,0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.04) 1px, transparent 1px);
+  background-size: 64px 64px;
+  mask-image: radial-gradient(ellipse 70% 70% at 50% 30%, black 30%, transparent 70%);
 }
 
-/* ═══════════════════════════════════════════════════════════════════════════
-   Layout
-   ═══════════════════════════════════════════════════════════════════════════ */
-
+/* ── App Container ──────────────────────────────────────────────────────── */
 #app {
   position: relative;
   z-index: 1;
   width: 100%;
-  max-width: 880px;
+  max-width: var(--max-width);
   margin: 0 auto;
-  padding: 40px 24px 60px;
-}
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   Header
-   ═══════════════════════════════════════════════════════════════════════════ */
-
-.header {
-  text-align: center;
-  margin-bottom: 40px;
-  position: relative;
-}
-
-.logo-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 64px; height: 64px;
-  border-radius: 18px;
-  background: linear-gradient(135deg, var(--accent), var(--pink));
-  margin-bottom: 16px;
-  box-shadow: 0 8px 32px rgba(139, 92, 246, 0.3);
-  position: relative;
-  animation: logoPulse 3s ease-in-out infinite;
-}
-
-.logo-icon svg {
-  width: 32px; height: 32px;
-  fill: none; stroke: #fff;
-  stroke-width: 2;
-}
-
-@keyframes logoPulse {
-  0%, 100% { box-shadow: 0 8px 32px rgba(139, 92, 246, 0.3); }
-  50% { box-shadow: 0 8px 48px rgba(236, 72, 153, 0.45); }
-}
-
-.header h1 {
-  font-size: 2.2rem;
-  font-weight: 800;
-  letter-spacing: -0.5px;
-  background: linear-gradient(135deg, var(--accent2) 0%, #c4b5fd 40%, var(--pink) 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
-
-.header .subtitle {
-  color: var(--text-dim);
-  font-size: 0.9rem;
-  font-weight: 400;
-  margin-top: 6px;
-  letter-spacing: 0.3px;
-}
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   Status Pills
-   ═══════════════════════════════════════════════════════════════════════════ */
-
-.status-pills {
+  padding: 32px 24px 64px;
   display: flex;
-  gap: 8px;
-  justify-content: center;
-  flex-wrap: wrap;
-  margin-bottom: 32px;
+  flex-direction: column;
+  gap: var(--gap);
 }
 
-.pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  font-size: 0.76rem;
-  font-weight: 500;
-  color: var(--text-dim);
-  background: var(--surface);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  padding: 6px 14px;
-  border-radius: 999px;
-  border: 1px solid var(--border);
-  transition: all var(--transition);
-}
-
-.pill .dot {
-  width: 7px; height: 7px;
-  border-radius: 50%;
-  display: inline-block;
-  position: relative;
-}
-
-.pill .dot.ok {
-  background: var(--green);
-  box-shadow: 0 0 8px var(--green-glow);
-}
-.pill .dot.fail {
-  background: var(--red);
-  box-shadow: 0 0 8px var(--red-glow);
-}
-.pill .dot.pending {
-  background: var(--yellow);
-  box-shadow: 0 0 8px rgba(251, 191, 36, 0.3);
-  animation: pulse-dot 1.5s ease-in-out infinite;
-}
-
-@keyframes pulse-dot {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.4; }
-}
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   Skeleton Loading
-   ═══════════════════════════════════════════════════════════════════════════ */
-
-.skeleton {
-  background: linear-gradient(90deg, rgba(255,255,255,0.03) 25%, rgba(255,255,255,0.06) 50%, rgba(255,255,255,0.03) 75%);
-  background-size: 200% 100%;
-  animation: skeletonShimmer 1.5s ease-in-out infinite;
-  border-radius: 8px;
-}
-
-@keyframes skeletonShimmer {
-  0% { background-position: 200% 0; }
-  100% { background-position: -200% 0; }
-}
-
-.skeleton-pill { width: 80px; height: 28px; display: inline-block; margin-right: 8px; }
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   Glass Card
-   ═══════════════════════════════════════════════════════════════════════════ */
-
+/* ── Glass Card ─────────────────────────────────────────────────────────── */
 .card {
-  background: var(--surface);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  padding: 24px;
-  margin-bottom: 16px;
-  transition: border-color var(--transition), box-shadow var(--transition);
+  background: var(--glass-1);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-lg);
+  padding: 22px;
+  position: relative;
+  transition: border-color var(--dur-normal) var(--ease-out), box-shadow var(--dur-normal) var(--ease-out), transform var(--dur-normal) var(--ease-out);
 }
-
-.card:hover {
-  border-color: var(--border-hover);
-  box-shadow: var(--shadow-lg);
+.card::after {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: var(--r-lg);
+  padding: 1px;
+  background: linear-gradient(135deg, rgba(255,255,255,0.04), transparent 40%, transparent 60%, rgba(255,255,255,0.02));
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity var(--dur-slow) var(--ease-out);
 }
+.card:hover { border-color: var(--glass-border-hover); box-shadow: var(--shadow-md); }
+.card:hover::after { opacity: 1; }
+.card--active { border-color: var(--glass-border-focus); box-shadow: var(--shadow-glow); }
 
+/* ── Card Header ────────────────────────────────────────────────────────── */
 .card-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 18px;
+  margin-bottom: 20px;
+  gap: 12px;
 }
-
 .card-header h2 {
-  font-size: 0.95rem;
+  font-size: var(--fs-md);
   font-weight: 600;
-  color: var(--text);
   display: flex;
   align-items: center;
   gap: 10px;
+  color: var(--text);
+  letter-spacing: -0.2px;
+}
+.card-header h2 .icon-dot {
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+}
+.icon-dot--search { background: var(--accent); box-shadow: 0 0 8px var(--accent-glow); }
+.icon-dot--progress { background: var(--info); box-shadow: 0 0 8px var(--info-glow); }
+.icon-dot--files { background: var(--success); box-shadow: 0 0 8px var(--success-glow); }
+.icon-dot--settings { background: var(--warning); box-shadow: 0 0 8px var(--warning-glow); }
+
+.badge {
+  font-size: var(--fs-xs);
+  font-weight: 500;
+  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.025);
+  padding: 3px 10px;
+  border-radius: var(--r-full);
+  border: 1px solid var(--glass-border);
+  white-space: nowrap;
 }
 
-.card-header h2 .icon-circle {
+/* ── Header ─────────────────────────────────────────────────────────────── */
+.app-header {
+  text-align: center;
+  padding-bottom: 8px;
+}
+.logo {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 32px; height: 32px;
-  border-radius: 10px;
-  font-size: 0.85rem;
-}
-
-.card-header h2 .icon-circle.search-icon { background: rgba(139, 92, 246, 0.15); }
-.card-header h2 .icon-circle.progress-icon { background: rgba(34, 211, 238, 0.12); }
-.card-header h2 .icon-circle.files-icon { background: rgba(52, 211, 153, 0.12); }
-.card-header h2 .icon-circle.settings-icon { background: rgba(251, 191, 36, 0.12); }
-
-/* Stats badge */
-.stats-badge {
-  font-size: 0.7rem;
-  font-weight: 500;
-  color: var(--text-dim);
-  background: rgba(255, 255, 255, 0.03);
-  padding: 3px 10px;
-  border-radius: 999px;
-  border: 1px solid var(--border);
-  white-space: nowrap;
-}
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   Search Bar
-   ═══════════════════════════════════════════════════════════════════════════ */
-
-.search-group {
-  display: flex;
-  gap: 10px;
-  margin-bottom: 14px;
-}
-
-.search-wrapper {
-  flex: 1;
+  width: 56px; height: 56px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, var(--accent) 0%, var(--pink) 100%);
+  margin-bottom: 12px;
+  box-shadow: 0 8px 32px rgba(139, 92, 246, 0.3);
+  animation: logoPulse 3s var(--ease-in-out) infinite;
   position: relative;
 }
-
-.search-wrapper .search-icon-inner {
-  position: absolute;
-  left: 14px;
-  top: 50%;
-  transform: translateY(-50%);
-  color: var(--text-muted);
-  font-size: 1rem;
-  pointer-events: none;
-  transition: color var(--transition);
-  z-index: 1;
+.logo svg { width: 30px; height: 30px; fill: none; stroke: #fff; stroke-width: 2; }
+@keyframes logoPulse {
+  0%, 100% { box-shadow: 0 8px 32px rgba(139, 92, 246, 0.3); }
+  50% { box-shadow: 0 8px 48px rgba(236, 72, 153, 0.45); }
+}
+.app-header h1 {
+  font-size: var(--fs-2xl);
+  font-weight: 800;
+  letter-spacing: -0.6px;
+  background: linear-gradient(135deg, var(--accent-light) 0%, #c4b5fd 40%, var(--pink) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  line-height: 1.2;
+}
+.app-header .tagline {
+  color: var(--text-secondary);
+  font-size: var(--fs-sm);
+  font-weight: 400;
+  margin-top: 4px;
+  letter-spacing: 0.2px;
+  opacity: 0.8;
 }
 
-.search-input {
-  width: 100%;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 13px 14px 13px 42px;
-  color: var(--text);
-  font-size: 0.92rem;
-  font-family: var(--font);
-  outline: none;
-  transition: all var(--transition);
-}
-
-.search-input::placeholder { color: var(--text-muted); }
-.search-input:focus {
-  border-color: var(--accent);
-  background: rgba(139, 92, 246, 0.04);
-  box-shadow: 0 0 0 3px var(--accent-glow);
-}
-
-/* Focus-within: glow the icon too */
-.search-wrapper:focus-within .search-icon-inner { color: var(--accent2); }
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   Options Row
-   ═══════════════════════════════════════════════════════════════════════════ */
-
-.options-row {
+/* ── Status Pills ───────────────────────────────────────────────────────── */
+.status-bar {
   display: flex;
-  gap: 8px;
+  gap: 6px;
+  justify-content: center;
   flex-wrap: wrap;
-  align-items: center;
 }
-
-.select-sm {
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 9px 32px 9px 12px;
-  color: var(--text);
-  font-size: 0.82rem;
-  font-family: var(--font);
-  outline: none;
-  cursor: pointer;
-  transition: all var(--transition);
-  appearance: none;
-  -webkit-appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239090a8' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 10px center;
-}
-
-.select-sm:hover { border-color: var(--border-hover); }
-.select-sm:focus {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-glow);
-}
-
-.checkbox-pill {
+.status-pill {
   display: inline-flex;
   align-items: center;
-  gap: 9px;
-  font-size: 0.84rem;
+  gap: 6px;
+  font-size: var(--fs-xs);
   font-weight: 500;
-  color: var(--text-dim);
-  cursor: pointer;
-  user-select: none;
-  padding: 10px 18px;
-  border-radius: 10px;
-  border: 1px solid var(--border);
-  background: rgba(255, 255, 255, 0.02);
-  transition: all var(--transition);
-  min-height: 42px;
-  white-space: nowrap;
+  color: var(--text-secondary);
+  background: var(--glass-2);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  padding: 5px 13px;
+  border-radius: var(--r-full);
+  border: 1px solid var(--glass-border);
+  transition: all var(--dur-fast) var(--ease-out);
 }
-
-.checkbox-pill:hover {
-  border-color: var(--accent);
-  background: rgba(139, 92, 246, 0.05);
-  color: var(--text);
-}
-
-.checkbox-pill.checked {
-  border-color: var(--accent);
-  background: rgba(139, 92, 246, 0.12);
-  color: var(--accent2);
-  box-shadow: 0 0 0 2px var(--accent-glow);
-}
-
-.checkbox-pill span { pointer-events: none; }
-
-.checkbox-pill input[type="checkbox"] {
-  accent-color: var(--accent);
-  width: 17px;
-  height: 17px;
-  cursor: pointer;
-  margin: 0;
+.status-pill .status-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
   flex-shrink: 0;
 }
+.status-dot--ok { background: var(--success); box-shadow: 0 0 6px var(--success-glow); }
+.status-dot--fail { background: var(--error); box-shadow: 0 0 6px var(--error-glow); }
+.status-dot--pending { background: var(--warning); box-shadow: 0 0 6px var(--warning-glow); animation: pulse-dot 1.5s ease-in-out infinite; }
+@keyframes pulse-dot { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
 
-/* ═══════════════════════════════════════════════════════════════════════════
-   Buttons
-   ═══════════════════════════════════════════════════════════════════════════ */
+/* ── Skeleton ───────────────────────────────────────────────────────────── */
+.skeleton {
+  background: linear-gradient(90deg, rgba(255,255,255,0.02) 25%, rgba(255,255,255,0.05) 50%, rgba(255,255,255,0.02) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+  border-radius: var(--r-xs);
+}
+.skeleton--pill { width: 72px; height: 26px; display: inline-block; margin-right: 6px; }
 
+/* ── Buttons ────────────────────────────────────────────────────────────── */
 .btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  padding: 12px 22px;
+  gap: 7px;
+  padding: 10px 20px;
   border: none;
-  border-radius: var(--radius);
-  font-size: 0.88rem;
+  border-radius: var(--r-md);
+  font-size: var(--fs-sm);
   font-weight: 600;
-  font-family: var(--font);
+  font-family: var(--font-sans);
   cursor: pointer;
-  transition: all var(--transition);
+  transition: all var(--dur-fast) var(--ease-out);
   white-space: nowrap;
-  text-decoration: none;
-}
-
-.btn-primary {
-  background: linear-gradient(135deg, var(--accent), #7c3aed);
-  color: #fff;
-  box-shadow: 0 4px 20px var(--accent-glow);
   position: relative;
   overflow: hidden;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+.btn:active { transform: scale(0.97); }
+
+/* Ripple */
+.btn .ripple {
+  position: absolute;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.3);
+  transform: scale(0);
+  animation: ripple 0.6s ease-out;
+  pointer-events: none;
+}
+@keyframes ripple {
+  to { transform: scale(4); opacity: 0; }
 }
 
-.btn-primary::after {
+/* Primary */
+.btn--primary {
+  background: linear-gradient(135deg, var(--accent) 0%, #7c3aed 100%);
+  color: #fff;
+  box-shadow: 0 4px 20px var(--accent-glow);
+}
+.btn--primary::before {
   content: '';
   position: absolute;
   inset: 0;
-  background: linear-gradient(135deg, transparent 40%, rgba(255,255,255,0.1) 50%, transparent 60%);
+  background: linear-gradient(135deg, transparent 40%, rgba(255,255,255,0.08) 50%, transparent 60%);
   transform: translateX(-100%);
   transition: transform 0.6s;
 }
+.btn--primary:hover { transform: translateY(-1px); box-shadow: 0 6px 28px rgba(139, 92, 246, 0.4); }
+.btn--primary:hover::before { transform: translateX(100%); }
+.btn--primary:active { transform: translateY(0) scale(0.97); }
+.btn--primary:disabled { opacity: 0.45; cursor: not-allowed; transform: none; box-shadow: none; }
+.btn--primary:disabled::before { display: none; }
 
-.btn-primary:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 6px 28px rgba(139, 92, 246, 0.45);
-}
-
-.btn-primary:hover::after { transform: translateX(100%); }
-.btn-primary:active { transform: translateY(0) scale(0.98); }
-
-.btn-primary:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-  transform: none;
-  box-shadow: none;
-}
-.btn-primary:disabled::after { display: none; }
-
-.btn-sm {
-  padding: 6px 14px;
-  font-size: 0.76rem;
-  font-weight: 500;
-  border-radius: 8px;
-}
-
-.btn-ghost {
+/* Ghost */
+.btn--ghost {
   background: transparent;
-  border: 1px solid var(--border);
-  color: var(--text-dim);
+  border: 1px solid var(--glass-border);
+  color: var(--text-secondary);
 }
-
-.btn-ghost:hover {
+.btn--ghost:hover {
   border-color: var(--accent);
   color: var(--text);
   background: rgba(139, 92, 246, 0.06);
 }
 
-.btn-danger {
+/* Danger */
+.btn--danger {
   background: transparent;
-  border: 1px solid rgba(248, 113, 113, 0.3);
-  color: var(--red);
+  border: 1px solid rgba(248, 113, 113, 0.25);
+  color: var(--error);
+}
+.btn--danger:hover { background: rgba(248, 113, 113, 0.08); border-color: var(--error); }
+
+/* Sizes */
+.btn--sm { padding: 5px 12px; font-size: var(--fs-xs); border-radius: var(--r-xs); }
+.btn--xs { padding: 3px 10px; font-size: 0.65rem; font-weight: 500; border-radius: var(--r-xs); }
+
+/* Icon-only */
+.btn--icon {
+  width: 34px; height: 34px; padding: 0;
+  border-radius: var(--r-sm);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 1rem;
+}
+.btn--icon:hover { border-color: var(--glass-border); color: var(--text); background: rgba(255,255,255,0.03); }
+.btn--icon.danger:hover { border-color: rgba(248,113,113,0.3); color: var(--error); background: rgba(248,113,113,0.06); }
+
+/* ── Search ─────────────────────────────────────────────────────────────── */
+.search-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1;
+}
+.search-icon {
+  position: absolute;
+  left: 16px;
+  color: var(--text-muted);
+  font-size: 1rem;
+  pointer-events: none;
+  z-index: 1;
+  transition: color var(--dur-fast) var(--ease-out);
+}
+.search-wrapper:focus-within .search-icon { color: var(--accent-light); }
+.search-input {
+  width: 100%;
+  background: var(--bg-input);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-md);
+  padding: 12px 14px 12px 44px;
+  color: var(--text);
+  font-size: var(--fs-sm);
+  font-family: var(--font-sans);
+  outline: none;
+  transition: all var(--dur-fast) var(--ease-out);
+}
+.search-input::placeholder { color: var(--text-muted); opacity: 0.7; }
+.search-input:focus {
+  border-color: var(--accent);
+  background: var(--bg-input-focus);
+  box-shadow: 0 0 0 4px var(--accent-glow);
 }
 
-.btn-danger:hover {
-  background: rgba(248, 113, 113, 0.1);
-  border-color: var(--red);
+/* Search History Dropdown */
+.search-history {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0; right: 0;
+  background: var(--bg-elevated);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-lg);
+  z-index: 100;
+  max-height: 200px;
+  overflow-y: auto;
+  display: none;
+}
+.search-history--open { display: block; }
+.search-history__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  font-size: var(--fs-sm);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background var(--dur-fast);
+  gap: 10px;
+}
+.search-history__item:hover { background: rgba(255,255,255,0.03); color: var(--text); }
+.search-history__item .history-query {
+  flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.search-history__item .history-remove {
+  color: var(--text-muted); cursor: pointer; padding: 2px 6px; border-radius: var(--r-xs); flex-shrink: 0;
+  font-size: 0.8rem; line-height: 1; opacity: 0; transition: opacity var(--dur-fast);
+}
+.search-history__item:hover .history-remove { opacity: 1; }
+.search-history__item .history-remove:hover { color: var(--error); background: rgba(248,113,113,0.1); }
+.search-history__empty { padding: 14px; text-align: center; color: var(--text-muted); font-size: var(--fs-xs); }
+
+.search-history::-webkit-scrollbar { width: 3px; }
+.search-history::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.06); border-radius: 2px; }
+
+/* Drop Zone */
+.drop-indicator {
+  position: absolute;
+  inset: -3px;
+  border-radius: var(--r-lg);
+  border: 2px dashed var(--accent);
+  background: rgba(139, 92, 246, 0.06);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+  font-size: var(--fs-sm);
+  color: var(--accent-light);
+  font-weight: 500;
+  pointer-events: none;
+  gap: 8px;
+}
+.drop-indicator--active { display: flex; }
+
+/* ── Options Row ────────────────────────────────────────────────────────── */
+.options-row {
+  display: flex;
+  gap: 7px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.select-sm {
+  background: var(--bg-input);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-sm);
+  padding: 8px 32px 8px 12px;
+  color: var(--text);
+  font-size: var(--fs-xs);
+  font-family: var(--font-sans);
+  outline: none;
+  cursor: pointer;
+  transition: all var(--dur-fast) var(--ease-out);
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239c97ad' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+}
+.select-sm:hover { border-color: var(--glass-border-hover); }
+.select-sm:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
+
+.toggle-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--fs-xs);
+  font-weight: 500;
+  color: var(--text-secondary);
+  cursor: pointer;
+  user-select: none;
+  padding: 9px 15px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--glass-border);
+  background: rgba(255,255,255,0.015);
+  transition: all var(--dur-fast) var(--ease-out);
+  white-space: nowrap;
+}
+.toggle-pill:hover { border-color: var(--accent); color: var(--text); background: rgba(139,92,246,0.04); }
+.toggle-pill--on {
+  border-color: var(--accent);
+  background: rgba(139,92,246,0.1);
+  color: var(--accent-light);
+  box-shadow: 0 0 0 2px var(--accent-glow);
+}
+.toggle-pill input[type="checkbox"] {
+  accent-color: var(--accent);
+  width: 16px; height: 16px;
+  cursor: pointer; margin: 0; flex-shrink: 0;
 }
 
-/* ═══════════════════════════════════════════════════════════════════════════
-   Progress Items
-   ═══════════════════════════════════════════════════════════════════════════ */
+/* ── Keyboard Shortcuts Hint ────────────────────────────────────────────── */
+.kbd-hints {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--glass-border);
+}
+.kbd-hint {
+  font-size: 0.62rem;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  opacity: 0.6;
+  transition: opacity var(--dur-fast);
+}
+.kbd-hint:hover { opacity: 1; }
+.kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 18px;
+  padding: 0 5px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--glass-border);
+  border-radius: 4px;
+  font-family: var(--font-sans);
+  font-size: 0.6rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  line-height: 1;
+}
 
-.progress-area { min-height: 40px; }
+/* ── Progress ───────────────────────────────────────────────────────────── */
+.progress-area { min-height: 50px; }
 
 .progress-item {
-  background: rgba(255, 255, 255, 0.02);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 18px;
+  background: rgba(255,255,255,0.015);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-md);
+  padding: 16px 18px;
   margin-bottom: 10px;
-  animation: slideIn 0.3s ease-out;
+  animation: slideUp 0.35s var(--ease-spring);
+  position: relative;
+  overflow: hidden;
 }
-
-@keyframes slideIn {
-  from { opacity: 0; transform: translateY(-8px); }
-  to { opacity: 1; transform: translateY(0); }
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(10px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
 }
-
-.progress-item.cancelling {
-  opacity: 0.5;
-  border-color: rgba(248, 113, 113, 0.2);
-}
+.progress-item--done { border-color: rgba(52,211,153,0.15); }
+.progress-item--error { border-color: rgba(248,113,113,0.15); }
+.progress-item--cancelling { opacity: 0.5; border-color: rgba(248,113,113,0.2); }
 
 .progress-item .task-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   margin-bottom: 12px;
+  gap: 10px;
 }
-
-.progress-item .task-query {
+.task-query {
   font-weight: 600;
-  font-size: 0.88rem;
+  font-size: var(--fs-sm);
   display: flex;
   align-items: center;
   gap: 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
 }
-
-.progress-item .task-query .spinner {
+.task-query .spinner {
   width: 16px; height: 16px;
-  border: 2px solid var(--border);
+  border: 2px solid var(--glass-border);
   border-top-color: var(--accent);
   border-radius: 50%;
-  animation: spin 0.8s linear infinite;
+  animation: spin 0.7s linear infinite;
+  flex-shrink: 0;
 }
-
-.progress-item .task-query .done-icon { color: var(--green); font-size: 1rem; }
-.progress-item .task-query .error-icon { color: var(--red); font-size: 1rem; }
-
+.task-query .icon--done { color: var(--success); flex-shrink: 0; font-size: 1rem; }
+.task-query .icon--error { color: var(--error); flex-shrink: 0; font-size: 1rem; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
 /* Progress Bar */
-.progress-bar-outer {
+.progress-bar {
   height: 5px;
-  background: rgba(255, 255, 255, 0.04);
+  background: rgba(255,255,255,0.03);
   border-radius: 3px;
   overflow: hidden;
   margin-bottom: 12px;
 }
-
-.progress-bar-inner {
+.progress-bar__fill {
   height: 100%;
   border-radius: 3px;
-  transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: width 0.5s var(--ease-out);
   width: 0%;
   position: relative;
 }
-
-.progress-bar-inner.active {
-  background: linear-gradient(90deg, var(--accent), var(--pink), var(--accent));
-  background-size: 200% 100%;
-  animation: shimmer 2s linear infinite;
+.progress-bar__fill--active {
+  background: linear-gradient(90deg, var(--accent), var(--pink), var(--info), var(--accent));
+  background-size: 300% 100%;
+  animation: barWave 2.5s linear infinite;
+}
+.progress-bar__fill--done { background: var(--success); box-shadow: 0 0 10px var(--success-glow); }
+.progress-bar__fill--error { background: var(--error); box-shadow: 0 0 10px var(--error-glow); }
+@keyframes barWave {
+  0% { background-position: 300% 0; }
+  100% { background-position: -300% 0; }
 }
 
-.progress-bar-inner.done {
-  background: var(--green);
-  box-shadow: 0 0 12px var(--green-glow);
+/* Audio Equalizer (in-progress visualizer) */
+.equalizer {
+  display: inline-flex;
+  gap: 2px;
+  align-items: flex-end;
+  height: 14px;
+  flex-shrink: 0;
 }
-
-.progress-bar-inner.error {
-  background: var(--red);
-  box-shadow: 0 0 12px var(--red-glow);
+.equalizer__bar {
+  width: 3px;
+  background: var(--accent-light);
+  border-radius: 2px;
+  animation: eqJump 0.55s ease-in-out infinite;
 }
-
-@keyframes shimmer {
-  0% { background-position: 200% 0; }
-  100% { background-position: -200% 0; }
+.equalizer__bar:nth-child(1) { height: 6px; animation-delay: 0s; }
+.equalizer__bar:nth-child(2) { height: 11px; animation-delay: 0.08s; }
+.equalizer__bar:nth-child(3) { height: 5px; animation-delay: 0.16s; }
+.equalizer__bar:nth-child(4) { height: 14px; animation-delay: 0.24s; }
+.equalizer__bar:nth-child(5) { height: 8px; animation-delay: 0.32s; }
+.equalizer__bar:nth-child(6) { height: 12px; animation-delay: 0.4s; }
+.equalizer__bar:nth-child(7) { height: 4px; animation-delay: 0.48s; }
+@keyframes eqJump {
+  0%, 100% { transform: scaleY(0.3); }
+  50% { transform: scaleY(1); }
 }
 
 /* Logs */
 .task-logs {
-  max-height: 140px;
+  max-height: 120px;
   overflow-y: auto;
   font-family: var(--font-mono);
-  font-size: 0.72rem;
+  font-size: 0.67rem;
   color: var(--text-muted);
   line-height: 1.6;
-  background: rgba(0, 0, 0, 0.25);
-  border-radius: 8px;
-  padding: 10px 12px;
-  border: 1px solid rgba(255, 255, 255, 0.03);
+  background: rgba(0,0,0,0.3);
+  border-radius: var(--r-xs);
+  padding: 8px 10px;
+  border: 1px solid rgba(255,255,255,0.02);
 }
+.task-logs::-webkit-scrollbar { width: 3px; }
+.task-logs::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.06); border-radius: 2px; }
+.log-line { padding: 0 2px; }
+.log-line--hl { color: var(--accent-light); }
+.log-line--warn { color: var(--warning); }
+.log-line--err { color: var(--error); }
 
-.task-logs::-webkit-scrollbar { width: 4px; }
-.task-logs::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.08);
-  border-radius: 2px;
-}
-
-.task-log-line { padding: 0 2px; }
-.task-log-line.highlight { color: var(--accent2); }
-.task-log-line.warn { color: var(--yellow); }
-.task-log-line.error { color: var(--red); }
-
-/* Status footer */
 .task-status-footer {
   display: flex;
   align-items: center;
   gap: 8px;
   margin-top: 10px;
-  font-size: 0.78rem;
+  font-size: var(--fs-xs);
 }
-.task-status-footer.success { color: var(--green); }
-.task-status-footer.error { color: var(--red); }
-.task-status-footer.pending { color: var(--text-dim); }
-.task-status-footer.cancelling { color: var(--red); }
+.task-status-footer--ok { color: var(--success); }
+.task-status-footer--err { color: var(--error); }
+.task-status-footer--pending { color: var(--text-secondary); }
 
-/* Cancelling overlay */
-.cancelling-overlay {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 0.78rem;
-  color: var(--red);
-  margin-top: 8px;
-}
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   Music Bars Animation
-   ═══════════════════════════════════════════════════════════════════════════ */
-
-.music-bars {
-  display: inline-flex;
-  gap: 2px;
-  align-items: flex-end;
-  height: 16px;
-  margin-left: auto;
-}
-
-.music-bars .bar {
-  width: 3px;
-  background: var(--accent);
-  border-radius: 2px;
-  animation: barJump 0.6s ease-in-out infinite;
-}
-
-.music-bars .bar:nth-child(1) { height: 8px; animation-delay: 0s; }
-.music-bars .bar:nth-child(2) { height: 13px; animation-delay: 0.1s; }
-.music-bars .bar:nth-child(3) { height: 6px; animation-delay: 0.2s; }
-.music-bars .bar:nth-child(4) { height: 15px; animation-delay: 0.3s; }
-.music-bars .bar:nth-child(5) { height: 10px; animation-delay: 0.4s; }
-
-@keyframes barJump {
-  0%, 100% { transform: scaleY(0.4); }
-  50% { transform: scaleY(1); }
-}
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   File List
-   ═══════════════════════════════════════════════════════════════════════════ */
-
+/* ── File List ──────────────────────────────────────────────────────────── */
 .file-list {
-  max-height: 380px;
+  max-height: 500px;
   overflow-y: auto;
 }
-
 .file-list::-webkit-scrollbar { width: 4px; }
-.file-list::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.06);
-  border-radius: 2px;
-}
+.file-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.05); border-radius: 2px; }
 
 .file-item {
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding: 12px 14px;
-  border-radius: var(--radius-sm);
-  transition: background var(--transition), opacity 0.3s ease;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: var(--r-sm);
+  transition: background var(--dur-fast), border-color var(--dur-fast), opacity 0.3s;
   border: 1px solid transparent;
+  position: relative;
 }
+.file-item:hover { background: rgba(255,255,255,0.02); border-color: var(--glass-border); }
+.file-item + .file-item { margin-top: 1px; }
 
-.file-item:hover {
-  background: rgba(255, 255, 255, 0.02);
-  border-color: var(--border);
-}
-
-.file-item + .file-item { margin-top: 2px; }
-
-.file-icon {
+.file-item__icon {
+  width: 36px; height: 36px;
+  border-radius: var(--r-sm);
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 38px; height: 38px;
-  border-radius: 10px;
-  font-size: 1rem;
+  font-size: 0.95rem;
   flex-shrink: 0;
+  transition: transform var(--dur-fast);
 }
+.file-item:hover .file-item__icon { transform: scale(1.05); }
+.file-icon--mp3  { background: rgba(139,92,246,0.15); }
+.file-icon--flac { background: rgba(52,211,153,0.12); }
+.file-icon--m4a  { background: rgba(34,211,238,0.12); }
+.file-icon--opus { background: rgba(251,191,36,0.12); }
+.file-icon--def  { background: rgba(255,255,255,0.03); }
 
-.file-icon.mp3 { background: rgba(139, 92, 246, 0.15); }
-.file-icon.flac { background: rgba(52, 211, 153, 0.12); }
-.file-icon.m4a { background: rgba(34, 211, 238, 0.12); }
-.file-icon.default { background: rgba(255, 255, 255, 0.04); }
-
-.file-info {
-  flex: 1;
-  min-width: 0;
-}
-
-.file-name {
-  font-size: 0.86rem;
+.file-item__info { flex: 1; min-width: 0; }
+.file-item__name {
+  font-size: var(--fs-sm);
   font-weight: 500;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--text);
 }
-
-.file-meta {
-  font-size: 0.72rem;
+.file-item__meta {
+  font-size: var(--fs-xs);
   color: var(--text-muted);
   margin-top: 2px;
   display: flex;
-  gap: 10px;
-}
-
-.file-del {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 30px;
-  height: 30px;
-  border-radius: 8px;
-  border: 1px solid transparent;
-  background: transparent;
-  color: var(--text-muted);
-  cursor: pointer;
-  font-size: 1rem;
-  transition: all var(--transition);
-  flex-shrink: 0;
-}
-
-.file-del:hover {
-  border-color: rgba(248, 113, 113, 0.3);
-  background: rgba(248, 113, 113, 0.08);
-  color: var(--red);
-}
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   Settings
-   ═══════════════════════════════════════════════════════════════════════════ */
-
-.setting-row {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 14px 0;
-  border-bottom: 1px solid var(--border);
-}
-
-.setting-row:last-child { border-bottom: none; padding-bottom: 0; }
-.setting-row:first-child { padding-top: 0; }
-
-.setting-label {
-  font-size: 0.84rem;
-  color: var(--text-dim);
-  min-width: 140px;
-  font-weight: 500;
-}
-
-.setting-input {
-  flex: 1;
-  background: rgba(255, 255, 255, 0.025);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 10px 14px;
-  color: var(--text);
-  font-size: 0.84rem;
-  font-family: var(--font-mono);
-  outline: none;
-  transition: all var(--transition);
-}
-
-.setting-input:focus {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-glow);
-}
-
-.setting-input::placeholder { color: var(--text-muted); }
-
-.setting-hint {
-  font-size: 0.7rem;
-  color: var(--text-muted);
-  margin-top: 4px;
-  font-family: var(--font);
-}
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   Empty States
-   ═══════════════════════════════════════════════════════════════════════════ */
-
-.empty-state {
-  text-align: center;
-  padding: 40px 20px;
-  color: var(--text-muted);
-}
-
-.empty-state .empty-icon {
-  font-size: 2.5rem;
-  margin-bottom: 12px;
-  opacity: 0.5;
-}
-
-.empty-state p {
-  font-size: 0.86rem;
-  line-height: 1.5;
-}
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   Toast
-   ═══════════════════════════════════════════════════════════════════════════ */
-
-.toast {
-  position: fixed;
-  top: 24px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: var(--surface-solid);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 12px 24px;
-  font-size: 0.84rem;
-  font-weight: 500;
-  color: var(--text);
-  z-index: 1000;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
-  animation: toastIn 0.35s cubic-bezier(0.16, 1, 0.3, 1);
-  display: flex;
-  align-items: center;
   gap: 8px;
+  align-items: center;
 }
 
-.toast.error { border-color: rgba(248, 113, 113, 0.3); }
-.toast.success { border-color: rgba(52, 211, 153, 0.3); }
-
-@keyframes toastIn {
-  from { opacity: 0; transform: translateX(-50%) translateY(-12px) scale(0.95); }
-  to { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
+/* Audio preview */
+.audio-preview {
+  display: none;
+  position: absolute;
+  bottom: 0;
+  left: 0; right: 0;
+  height: 2px;
+  background: var(--accent);
+  opacity: 0;
+  transition: opacity 0.2s;
 }
+.file-item.playing .audio-preview { display: block; opacity: 1; }
 
-/* ═══════════════════════════════════════════════════════════════════════════
-   Responsive
-   ═══════════════════════════════════════════════════════════════════════════ */
-
-@media (max-width: 640px) {
-  #app { padding: 24px 16px 40px; }
-  .header h1 { font-size: 1.7rem; }
-  .logo-icon { width: 48px; height: 48px; border-radius: 14px; }
-  .logo-icon svg { width: 24px; height: 24px; }
-
-  .search-group { flex-direction: column; }
-  .search-group .btn-primary { width: 100%; }
-
-  .options-row { flex-direction: column; }
-  .options-row select, .options-row .checkbox-pill { width: 100%; }
-
-  .setting-row {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 8px;
-  }
-  .setting-label { min-width: 0; }
-  .setting-input { width: 100%; }
-
-  .file-item { flex-wrap: wrap; gap: 8px; }
-  .card { padding: 16px; }
-
-  .bg-glow.g1 { width: 300px; height: 300px; }
-  .bg-glow.g2 { width: 250px; height: 250px; }
-  .bg-glow.g3 { width: 200px; height: 200px; }
-}
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   Footer
-   ═══════════════════════════════════════════════════════════════════════════ */
-
-.footer {
-  text-align: center;
-  padding: 24px 0 0;
-  font-size: 0.72rem;
-  color: var(--text-muted);
-  opacity: 0.6;
-}
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   Playlist
-   ═══════════════════════════════════════════════════════════════════════════ */
-
+/* ── Playlist ───────────────────────────────────────────────────────────── */
 .playlist-banner {
   display: flex;
   align-items: center;
   gap: 14px;
-  padding: 14px 18px;
-  background: rgba(139, 92, 246, 0.06);
-  border: 1px solid rgba(139, 92, 246, 0.15);
-  border-radius: var(--radius);
-  margin-bottom: 14px;
+  padding: 14px 16px;
+  background: rgba(139,92,246,0.04);
+  border: 1px solid rgba(139,92,246,0.12);
+  border-radius: var(--r-md);
+  margin-bottom: 12px;
 }
+.playlist-banner__icon { font-size: 1.6rem; flex-shrink: 0; }
+.playlist-banner__info { flex: 1; min-width: 0; }
+.playlist-banner__title {
+  font-weight: 600; font-size: var(--fs-md); color: var(--text);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.playlist-banner__meta { font-size: var(--fs-xs); color: var(--text-secondary); margin-top: 2px; }
 
-.playlist-banner .pl-icon {
-  font-size: 1.8rem;
-  flex-shrink: 0;
+.pl-track-list {
+  max-height: 380px; overflow-y: auto;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-sm);
+  background: rgba(0,0,0,0.1);
+  margin-bottom: 12px;
 }
-
-.playlist-banner .pl-info {
-  flex: 1;
-  min-width: 0;
-}
-
-.playlist-banner .pl-title {
-  font-weight: 600;
-  font-size: 0.95rem;
-  color: var(--text);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.playlist-banner .pl-meta {
-  font-size: 0.76rem;
-  color: var(--text-dim);
-  margin-top: 2px;
-}
-
-.playlist-track-list {
-  max-height: 420px;
-  overflow-y: auto;
-  margin-bottom: 14px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: rgba(0,0,0,0.12);
-}
-
-.playlist-track-list::-webkit-scrollbar { width: 4px; }
-.playlist-track-list::-webkit-scrollbar-thumb {
-  background: rgba(255,255,255,0.06);
-  border-radius: 2px;
-}
+.pl-track-list::-webkit-scrollbar { width: 4px; }
+.pl-track-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.05); border-radius: 2px; }
 
 .pl-track {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 14px;
-  border-bottom: 1px solid rgba(255,255,255,0.03);
-  transition: background var(--transition);
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 12px; border-bottom: 1px solid rgba(255,255,255,0.02);
+  transition: background var(--dur-fast);
 }
-
 .pl-track:last-child { border-bottom: none; }
 .pl-track:hover { background: rgba(255,255,255,0.01); }
+.pl-track--done { opacity: 0.5; }
+.pl-track--fail { opacity: 0.45; }
+.pl-track__num { width: 24px; font-size: var(--fs-xs); color: var(--text-muted); text-align: right; flex-shrink: 0; font-family: var(--font-mono); }
+.pl-track__status { width: 18px; text-align: center; flex-shrink: 0; font-size: 0.75rem; }
+.pl-track__status.pending { color: var(--text-muted); }
+.pl-track__status.ok { color: var(--success); }
+.pl-track__status.fail { color: var(--error); }
+.pl-track__status.downloading { color: var(--accent); }
+.pl-track__title { flex: 1; font-size: var(--fs-sm); color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pl-track__artist { font-size: var(--fs-xs); color: var(--text-muted); width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex-shrink: 0; }
+.pl-stats { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; font-size: var(--fs-xs); }
+.pl-stats__count { color: var(--text-secondary); font-weight: 500; }
+.pl-stats__summary { color: var(--success); font-weight: 600; }
 
-.pl-track .pl-num {
-  width: 28px;
-  font-size: 0.72rem;
-  color: var(--text-muted);
-  text-align: right;
-  flex-shrink: 0;
-  font-family: var(--font-mono);
-}
-
-.pl-track .pl-status {
-  width: 20px;
-  text-align: center;
-  flex-shrink: 0;
-  font-size: 0.8rem;
-}
-
-.pl-track .pl-status.pending { color: var(--text-muted); }
-.pl-track .pl-status.ok { color: var(--green); }
-.pl-track .pl-status.fail { color: var(--red); }
-.pl-track .pl-status.downloading { color: var(--accent); }
-
-.pl-track .pl-title {
-  flex: 1;
-  font-size: 0.84rem;
-  color: var(--text);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.pl-track .pl-artist {
-  font-size: 0.72rem;
-  color: var(--text-muted);
-  width: 160px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-
-.pl-track.done { opacity: 0.6; }
-.pl-track.failed { opacity: 0.5; color: var(--red); }
-
-.pl-stats {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 14px;
-  font-size: 0.82rem;
-}
-
-.pl-stats .pl-count {
-  color: var(--text-dim);
-  font-weight: 500;
-}
-
-.pl-stats .pl-summary {
-  color: var(--green);
-  font-weight: 600;
-}
-
-/* Playlist detection hint */
 .pl-hint {
-  font-size: 0.72rem;
-  color: var(--accent2);
-  margin-top: 6px;
+  font-size: var(--fs-xs); color: var(--accent-light);
+  margin-top: 6px; display: flex; align-items: center; gap: 6px; padding-left: 4px;
+  animation: fadeSlideIn 0.3s var(--ease-out);
+}
+@keyframes fadeSlideIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
+
+/* ── Settings ───────────────────────────────────────────────────────────── */
+.setting-row {
+  display: flex; align-items: center; gap: 14px;
+  padding: 13px 0; border-bottom: 1px solid var(--glass-border);
+}
+.setting-row:last-child { border-bottom: none; padding-bottom: 0; }
+.setting-row:first-child { padding-top: 0; }
+.setting-row__label {
+  font-size: var(--fs-sm); color: var(--text-secondary);
+  min-width: 130px; font-weight: 500; flex-shrink: 0;
+}
+.setting-row__input {
+  flex: 1;
+  background: var(--bg-input);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-sm);
+  padding: 9px 12px;
+  color: var(--text);
+  font-size: var(--fs-sm);
+  font-family: var(--font-mono);
+  outline: none;
+  transition: all var(--dur-fast) var(--ease-out);
+}
+.setting-row__input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
+.setting-row__input::placeholder { color: var(--text-muted); }
+.setting-row__hint { font-size: 0.65rem; color: var(--text-muted); margin-top: 3px; font-family: var(--font-sans); }
+
+/* ── Empty State ────────────────────────────────────────────────────────── */
+.empty-state {
+  text-align: center; padding: 36px 20px; color: var(--text-muted);
+}
+.empty-state__icon { font-size: 2.2rem; margin-bottom: 10px; opacity: 0.45; display: inline-block; animation: emptyFloat 3s ease-in-out infinite; }
+@keyframes emptyFloat {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+.empty-state p { font-size: var(--fs-sm); line-height: 1.5; }
+
+/* ── Toast ──────────────────────────────────────────────────────────────── */
+.toast-container {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 2000;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: none;
+  max-width: 380px;
+}
+.toast {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding-left: 4px;
-  animation: fadeIn 0.3s ease;
+  gap: 8px;
+  background: var(--bg-elevated);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-md);
+  padding: 11px 18px;
+  font-size: var(--fs-sm);
+  font-weight: 500;
+  color: var(--text);
+  box-shadow: var(--shadow-lg);
+  animation: toastSlideIn 0.4s var(--ease-spring);
+  pointer-events: auto;
+}
+.toast--error { border-color: rgba(248,113,113,0.25); }
+.toast--success { border-color: rgba(52,211,153,0.2); }
+@keyframes toastSlideIn {
+  from { opacity: 0; transform: translateX(60px) scale(0.92); }
+  to { opacity: 1; transform: translateX(0) scale(1); }
 }
 
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(-4px); }
-  to { opacity: 1; transform: translateY(0); }
+/* ── Footer ─────────────────────────────────────────────────────────────── */
+.footer {
+  text-align: center; padding: 16px 0 0;
+  font-size: 0.65rem; color: var(--text-muted); opacity: 0.5;
 }
+
+/* ── Two-Column Layout (Desktop) ────────────────────────────────────────── */
+@media (min-width: 1024px) {
+  .app-body {
+    display: grid;
+    grid-template-columns: 1fr 420px;
+    gap: var(--gap);
+    align-items: start;
+  }
+  .app-body__main { display: flex; flex-direction: column; gap: var(--gap); }
+  .app-body__side { display: flex; flex-direction: column; gap: var(--gap); position: sticky; top: 20px; }
+}
+
+/* ── Responsive ─────────────────────────────────────────────────────────── */
+@media (max-width: 640px) {
+  html { font-size: 14px; }
+  #app { padding: 20px 12px 40px; }
+  .card { padding: 16px; border-radius: var(--r-md); }
+  .search-group { flex-direction: column; }
+  .options-row > * { flex: 1; }
+  .setting-row { flex-direction: column; align-items: flex-start; gap: 6px; }
+  .setting-row__label { min-width: auto; }
+  .setting-row__input { width: 100%; }
+  .file-item { flex-wrap: wrap; gap: 8px; }
+  .pl-track__artist { display: none; }
+  .kbd-hints { display: none; }
+  .toast-container { left: 12px; right: 12px; max-width: none; }
+}
+
+/* ── Utility ────────────────────────────────────────────────────────────── */
+.hidden { display: none !important; }
 </style>
 </head>
 <body>
 
 <!-- Animated Background -->
-<div class="bg-glow g1"></div>
-<div class="bg-glow g2"></div>
-<div class="bg-glow g3"></div>
+<div class="bg-orb bg-orb--1"></div>
+<div class="bg-orb bg-orb--2"></div>
+<div class="bg-orb bg-orb--3"></div>
+<div class="bg-grid"></div>
+
+<!-- Toast Container -->
+<div class="toast-container" id="toastContainer"></div>
 
 <div id="app">
-  <!-- ═══════════ Header ═══════════ -->
-  <div class="header">
-    <div class="logo-icon">
-      <svg viewBox="0 0 24 24">
-        <path d="M9 18V5l12-2v13"/>
-        <circle cx="6" cy="18" r="3"/>
-        <circle cx="18" cy="16" r="3"/>
-      </svg>
+
+  <!-- Header -->
+  <header class="app-header">
+    <div class="logo">
+      <svg viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
     </div>
     <h1>MelodyMine</h1>
-    <p class="subtitle">Free music downloader — Bilibili · YouTube · Soulseek · NetEase</p>
+    <p class="tagline">Bilibili · YouTube · Soulseek · NetEase · Spotify</p>
+  </header>
+
+  <!-- Status Bar -->
+  <div id="statusBar" class="status-bar" aria-label="System status">
+    <span class="skeleton skeleton--pill"></span>
+    <span class="skeleton skeleton--pill"></span>
+    <span class="skeleton skeleton--pill"></span>
+    <span class="skeleton skeleton--pill"></span>
   </div>
 
-  <!-- ═══════════ Status Pills ═══════════ -->
-  <div id="statusBar" class="status-pills">
-    <span class="skeleton skeleton-pill"></span>
-    <span class="skeleton skeleton-pill"></span>
-    <span class="skeleton skeleton-pill"></span>
-    <span class="skeleton skeleton-pill"></span>
-  </div>
+  <!-- Body: Two-Column -->
+  <div class="app-body">
+    <!-- Left Column -->
+    <div class="app-body__main">
 
-  <!-- ═══════════ Search ═══════════ -->
-  <div class="card">
-    <div class="card-header">
-      <h2><span class="icon-circle search-icon">🎵</span>Search &amp; Download</h2>
-    </div>
-    <div class="search-group">
-      <div class="search-wrapper">
-        <span class="search-icon-inner">🔍</span>
-        <input type="text" class="search-input" id="searchInput"
-               placeholder="Song name, artist, or playlist URL — e.g. 周杰伦 晴天 / paste playlist link"
-               autofocus
-               oninput="onSearchInput()"
-               onkeydown="if(event.key==='Enter')handleSearchKey(event)">
-      </div>
-      <button class="btn btn-primary" id="dlBtn" onclick="handleMainAction()">
-        <span id="dlBtnText">Download</span>
-        <span id="dlBtnSpinner" style="display:none;width:16px;height:16px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite"></span>
-      </button>
-    </div>
-    <div id="plHint" class="pl-hint" style="display:none"></div>
-    <!-- Playlist area (hidden until playlist resolved) -->
-    <div id="playlistArea" style="display:none">
-      <div class="playlist-banner" id="playlistBanner"></div>
-      <div class="pl-stats">
-        <span class="pl-count" id="plTrackCount"></span>
-        <span class="pl-summary" id="plSummary" style="display:none"></span>
-      </div>
-      <div class="playlist-track-list" id="playlistTrackList"></div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <button class="btn btn-primary btn-sm" id="plDlAllBtn" onclick="downloadPlaylistAll()">Download All</button>
-        <button class="btn btn-ghost btn-sm" id="plClearBtn" onclick="clearPlaylist()">Clear Playlist</button>
-        <label class="checkbox-pill" style="font-size:0.76rem;padding:5px 10px">
-          <input type="checkbox" id="plQuick" checked onchange="updatePlQuickPill()">
-          <span style="font-size:0.76rem">Skip P2P</span>
-        </label>
-      </div>
-    </div>
-    <div class="options-row" style="margin-top:10px">
-      <select class="select-sm" id="platform">
-        <option value="">Auto (smart detect)</option>
-        <option value="bilibili">Bilibili</option>
-        <option value="youtube">YouTube</option>
-        <option value="soulseek">Soulseek P2P</option>
-      </select>
-      <select class="select-sm" id="format">
-        <option value="mp3">MP3</option>
-        <option value="flac">FLAC</option>
-        <option value="m4a">M4A</option>
-        <option value="opus">Opus</option>
-        <option value="auto">Auto (best)</option>
-      </select>
-      <select class="select-sm" id="bitrate">
-        <option value="320k">320k</option>
-        <option value="256k">256k</option>
-        <option value="192k">192k</option>
-        <option value="128k">128k</option>
-        <option value="0">Best available</option>
-      </select>
-      <label class="checkbox-pill" id="quickPill">
-        <input type="checkbox" id="quick" onchange="updateQuickPill()">
-        <span>Skip P2P</span>
-      </label>
-    </div>
-  </div>
-
-  <!-- ═══════════ Progress ═══════════ -->
-  <div class="card" id="progressCard">
-    <div class="card-header">
-      <h2><span class="icon-circle progress-icon">📡</span>Download Progress</h2>
-    </div>
-    <div class="progress-area" id="progressArea">
-      <div class="empty-state">
-        <div class="empty-icon">🎶</div>
-        <p>No active downloads<br><span style="font-size:0.78rem;color:var(--text-muted)">Search for a song above to get started</span></p>
-      </div>
-    </div>
-  </div>
-
-  <!-- ═══════════ Downloads ═══════════ -->
-  <div class="card">
-    <div class="card-header">
-      <h2><span class="icon-circle files-icon">📁</span>Downloads <span class="stats-badge" id="filesStat" style="display:none"></span></h2>
-      <div style="display:flex;gap:8px">
-        <button class="btn btn-sm btn-primary" onclick="openFolder()">📂 Open Folder</button>
-        <button class="btn btn-sm btn-ghost" onclick="refreshFiles()">🔄 Refresh</button>
-        <button class="btn btn-sm btn-danger" id="clearAllBtn" style="display:none" onclick="clearAllRecords()">🗑 Clear</button>
-      </div>
-    </div>
-    <div class="file-list" id="fileList">
-      <div class="empty-state">
-        <div class="empty-icon">📂</div>
-        <p>Loading your music library...</p>
-      </div>
-    </div>
-  </div>
-
-  <!-- ═══════════ Settings ═══════════ -->
-  <div class="card" id="settingsCard">
-    <div class="card-header">
-      <h2><span class="icon-circle settings-icon">⚙️</span>Settings</h2>
-    </div>
-    <div id="settingsPanel">
-      <div class="setting-row">
-        <span class="setting-label">📂 Output Directory</span>
-        <div style="flex:1">
-          <input type="text" class="setting-input" id="outDir" placeholder="~/Downloads/MelodyMine">
-          <div class="setting-hint" id="outDirHint" style="display:none"></div>
+      <!-- Search Card -->
+      <div class="card" id="searchCard" ondrop="return false">
+        <div class="drop-indicator" id="dropIndicator">📥 Drop URL or file to search</div>
+        <div class="card-header">
+          <h2><span class="icon-dot icon-dot--search"></span>Search &amp; Download</h2>
+        </div>
+        <div class="search-group" style="display:flex;gap:8px">
+          <div class="search-wrapper" id="searchWrapper">
+            <span class="search-icon">🔍</span>
+            <input type="text" class="search-input" id="searchInput"
+                   placeholder="Song, artist, or paste URL ..."
+                   autofocus autocomplete="off"
+                   oninput="onSearchInput()"
+                   onfocus="onSearchFocus()"
+                   onblur="onSearchBlur()"
+                   onkeydown="if(event.key==='Enter')handleMainAction()">
+            <div class="search-history" id="searchHistory">
+              <div class="search-history__empty">No recent searches</div>
+            </div>
+          </div>
+          <button class="btn btn--primary" id="dlBtn" onclick="handleMainAction()">
+            <span id="dlBtnText">Download</span>
+            <span id="dlBtnSpinner" style="display:none;width:16px;height:16px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite"></span>
+          </button>
+        </div>
+        <div id="plHint" class="pl-hint hidden"></div>
+        <!-- Playlist Area -->
+        <div id="playlistArea" class="hidden" style="margin-top:14px">
+          <div class="playlist-banner" id="playlistBanner"></div>
+          <div class="pl-stats">
+            <span class="pl-stats__count" id="plTrackCount"></span>
+            <span class="pl-stats__summary hidden" id="plSummary"></span>
+          </div>
+          <div class="pl-track-list" id="playlistTrackList"></div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <button class="btn btn--primary btn--sm" id="plDlAllBtn" onclick="downloadPlaylistAll()">Download All</button>
+            <button class="btn btn--ghost btn--sm" onclick="clearPlaylist()">Clear</button>
+            <label class="toggle-pill" style="font-size:0.7rem;padding:4px 10px">
+              <input type="checkbox" id="plQuick" checked> Skip P2P
+            </label>
+          </div>
+        </div>
+        <div class="options-row" style="margin-top:10px">
+          <select class="select-sm" id="platform">
+            <option value="">Auto detect</option>
+            <option value="bilibili">Bilibili</option>
+            <option value="youtube">YouTube</option>
+            <option value="soulseek">Soulseek P2P</option>
+          </select>
+          <select class="select-sm" id="format">
+            <option value="mp3">MP3</option>
+            <option value="flac">FLAC</option>
+            <option value="m4a">M4A</option>
+            <option value="opus">Opus</option>
+            <option value="auto">Auto (best)</option>
+          </select>
+          <select class="select-sm" id="bitrate">
+            <option value="320k">320k</option>
+            <option value="256k">256k</option>
+            <option value="192k">192k</option>
+            <option value="128k">128k</option>
+            <option value="0">Best available</option>
+          </select>
+          <label class="toggle-pill" id="quickPill">
+            <input type="checkbox" id="quick" onchange="updateQuickPill()"> Skip P2P
+          </label>
+        </div>
+        <div class="kbd-hints">
+          <span class="kbd-hint"><span class="kbd">Ctrl</span>+<span class="kbd">K</span> Focus search</span>
+          <span class="kbd-hint"><span class="kbd">Enter</span> Download</span>
+          <span class="kbd-hint"><span class="kbd">Esc</span> Clear</span>
+          <span class="kbd-hint">Drop URL anywhere</span>
         </div>
       </div>
-      <div class="setting-row">
-        <span class="setting-label">🌐 Proxy URL</span>
-        <div style="flex:1">
-          <input type="text" class="setting-input" id="proxyUrl" placeholder="socks5://127.0.0.1:7897">
-          <div class="setting-hint" id="proxyHint" style="display:none"></div>
+
+      <!-- Progress Card -->
+      <div class="card" id="progressCard">
+        <div class="card-header">
+          <h2><span class="icon-dot icon-dot--progress"></span>Progress</h2>
+        </div>
+        <div class="progress-area" id="progressArea">
+          <div class="empty-state">
+            <div class="empty-state__icon">🎧</div>
+            <p>Ready to download<br><span style="font-size:var(--fs-xs);color:var(--text-muted)">Search above to begin</span></p>
+          </div>
         </div>
       </div>
-      <div class="setting-row">
-        <span class="setting-label">🔗 Soulseek User</span>
-        <div style="flex:1">
-          <input type="text" class="setting-input" id="slskUser" placeholder="Your Soulseek username">
-          <div class="setting-hint" id="slskHint" style="display:none"></div>
+
+    </div>
+
+    <!-- Right Column -->
+    <div class="app-body__side">
+
+      <!-- Downloads Card -->
+      <div class="card">
+        <div class="card-header">
+          <h2><span class="icon-dot icon-dot--files"></span>Downloads <span class="badge hidden" id="filesStat"></span></h2>
+          <div style="display:flex;gap:6px">
+            <button class="btn btn--primary btn--sm" onclick="openFolder()">📂 Open</button>
+            <button class="btn btn--icon" onclick="refreshFiles()" title="Refresh">↻</button>
+            <button class="btn btn--icon danger hidden" id="clearAllBtn" onclick="clearAllRecords()" title="Clear records">🗑</button>
+          </div>
+        </div>
+        <div class="file-list" id="fileList">
+          <div class="empty-state">
+            <div class="empty-state__icon">📀</div>
+            <p>Loading library...</p>
+          </div>
         </div>
       </div>
-      <div class="setting-row">
-        <span class="setting-label">🔑 Soulseek Password</span>
-        <div style="flex:1">
-          <input type="password" class="setting-input" id="slskPass" placeholder="Your Soulseek password" autocomplete="off">
-          <div class="setting-hint" id="slskPassHint" style="display:none"></div>
+
+      <!-- Settings Card -->
+      <div class="card" id="settingsCard">
+        <div class="card-header">
+          <h2><span class="icon-dot icon-dot--settings"></span>Settings</h2>
+        </div>
+        <div>
+          <div class="setting-row">
+            <span class="setting-row__label">📁 Output</span>
+            <div style="flex:1">
+              <input type="text" class="setting-row__input" id="outDir" placeholder="~/Downloads/MelodyMine">
+              <div class="setting-row__hint hidden" id="outDirHint"></div>
+            </div>
+          </div>
+          <div class="setting-row">
+            <span class="setting-row__label">🌐 Proxy</span>
+            <div style="flex:1">
+              <input type="text" class="setting-row__input" id="proxyUrl" placeholder="socks5://127.0.0.1:7897">
+              <div class="setting-row__hint hidden" id="proxyHint"></div>
+            </div>
+          </div>
+          <div class="setting-row">
+            <span class="setting-row__label">🔗 Slsk User</span>
+            <div style="flex:1">
+              <input type="text" class="setting-row__input" id="slskUser" placeholder="Soulseek username" autocomplete="off">
+              <div class="setting-row__hint hidden" id="slskHint"></div>
+            </div>
+          </div>
+          <div class="setting-row">
+            <span class="setting-row__label">🔑 Slsk Pass</span>
+            <div style="flex:1">
+              <input type="password" class="setting-row__input" id="slskPass" placeholder="Soulseek password" autocomplete="off">
+              <div class="setting-row__hint hidden" id="slskPassHint"></div>
+            </div>
+          </div>
+          <div style="margin-top:12px;display:flex;align-items:center;justify-content:flex-end;gap:10px">
+            <span id="configSaved" style="color:var(--success);font-size:var(--fs-xs);opacity:0;transition:opacity 0.3s">✓ Saved</span>
+            <button class="btn btn--primary btn--sm" id="saveConfigBtn" onclick="saveConfig()">Save</button>
+          </div>
         </div>
       </div>
-      <div style="margin-top:14px;text-align:right">
-        <span id="configSaved" style="display:none;color:var(--green);font-size:0.78rem;margin-right:12px;opacity:0;transition:opacity 0.3s">✓ Saved</span>
-        <button class="btn btn-sm btn-primary" id="saveConfigBtn" onclick="saveConfig()">💾 Save Settings</button>
-      </div>
+
     </div>
   </div>
 
-  <div class="footer">MelodyMine — Open Source Music Downloader</div>
+  <footer class="footer">MelodyMine — Open Source Music Downloader</footer>
 </div>
 
 <script>
 // ═══════════════════════════════════════════════════════════════════════════
-// State
+//  MelodyMine — State & Initialization
 // ═══════════════════════════════════════════════════════════════════════════
+const $ = (sel) => document.querySelector(sel);
 const STATE = {
   activeTasks: {},
   files: [],
   health: null,
   loaded: false,
-  // Playlist state
-  playlist: null,         // {platform, title, creator, track_count, tracks: [{query, title, artist, status, file}]}
-  playlistTaskId: null,   // active playlist download task ID
+  playlist: null,
+  playlistTaskId: null,
 };
 
-// ═══════════════════════════════════════════════════════════════════════════
-// Init
-// ═══════════════════════════════════════════════════════════════════════════
 async function init() {
+  setupKeyboardShortcuts();
+  setupDragDrop();
+  setupRippleEffects();
   await Promise.all([checkHealth(), refreshFiles(), loadConfig()]);
   STATE.loaded = true;
   if (!Object.keys(STATE.activeTasks).length) renderProgress();
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   Keyboard Shortcuts
+   ═══════════════════════════════════════════════════════════════════════════ */
+function setupKeyboardShortcuts() {
+  document.addEventListener('keydown', (e) => {
+    // Ctrl+K / Cmd+K → focus search
+    if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+      e.preventDefault();
+      $('#searchInput').focus();
+      return;
+    }
+    // Escape → clear search / close playlist
+    if (e.key === 'Escape' && document.activeElement === $('#searchInput')) {
+      $('#searchInput').value = '';
+      onSearchInput();
+      if (STATE.playlist) clearPlaylist();
+      $('#searchInput').blur();
+      return;
+    }
+  });
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Drag & Drop
+   ═══════════════════════════════════════════════════════════════════════════ */
+function setupDragDrop() {
+  const card = $('#searchCard');
+  const indicator = $('#dropIndicator');
+  if (!card || !indicator) return;
+
+  let dragCounter = 0;
+  ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(evt => {
+    document.addEventListener(evt, (e) => { e.preventDefault(); e.stopPropagation(); });
+  });
+
+  document.addEventListener('dragenter', () => {
+    dragCounter++;
+    if (dragCounter === 1) indicator.classList.add('drop-indicator--active');
+  });
+  document.addEventListener('dragleave', () => {
+    dragCounter--;
+    if (dragCounter === 0) indicator.classList.remove('drop-indicator--active');
+  });
+  document.addEventListener('drop', (e) => {
+    indicator.classList.remove('drop-indicator--active');
+    dragCounter = 0;
+    const text = e.dataTransfer.getData('text/plain') || e.dataTransfer.getData('text/uri-list');
+    if (text) {
+      $('#searchInput').value = text.trim();
+      onSearchInput();
+      $('#searchInput').focus();
+    }
+  });
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Ripple Effect on Buttons
+   ═══════════════════════════════════════════════════════════════════════════ */
+function setupRippleEffects() {
+  document.addEventListener('click', (e) => {
+    const btn = e.target.closest('.btn');
+    if (!btn) return;
+    const ripple = document.createElement('span');
+    ripple.className = 'ripple';
+    const rect = btn.getBoundingClientRect();
+    const size = Math.max(rect.width, rect.height);
+    ripple.style.width = ripple.style.height = size + 'px';
+    ripple.style.left = (e.clientX - rect.left - size / 2) + 'px';
+    ripple.style.top = (e.clientY - rect.top - size / 2) + 'px';
+    btn.appendChild(ripple);
+    ripple.addEventListener('animationend', () => ripple.remove());
+  });
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Health Check
+   ═══════════════════════════════════════════════════════════════════════════ */
 async function checkHealth() {
   try {
     const r = await fetch('/api/health');
-    const d = await r.json();
-    STATE.health = d.status || {};
-  } catch (e) {
-    STATE.health = {};
-  }
+    STATE.health = (await r.json()).status || {};
+  } catch (_) { STATE.health = {}; }
   renderStatus();
 }
-
 function renderStatus() {
   const h = STATE.health || {};
   const items = [
@@ -1272,269 +1285,268 @@ function renderStatus() {
     { label: 'Python', ok: !!h.python },
     { label: h.os || 'System', ok: true },
   ];
-  document.getElementById('statusBar').innerHTML = items.map(i =>
-    `<div class="pill">
-      <span class="dot ${i.ok ? 'ok' : 'fail'}"></span> ${i.label}
-    </div>`
+  $('#statusBar').innerHTML = items.map(i =>
+    `<div class="status-pill"><span class="status-dot ${i.ok?'status-dot--ok':'status-dot--fail'}"></span> ${i.label}</div>`
   ).join('');
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// Playlist Detection (regex mirror backend)
-// ═══════════════════════════════════════════════════════════════════════════
+/* ═══════════════════════════════════════════════════════════════════════════
+   Search & Playlist Detection
+   ═══════════════════════════════════════════════════════════════════════════ */
 function isPlaylistUrl(q) {
   q = q.trim();
-  // YouTube playlist
-  if (/youtube\.com\/playlist\?list=[\w\-]+/i.test(q)) return true;
-  // NetEase playlist/album
-  if (/music\.163\.com\/playlist\?id=\d+/i.test(q)) return true;
-  if (/music\.163\.com\/album\?id=\d+/i.test(q)) return true;
-  // Spotify playlist/album
-  if (/open\.spotify\.com\/(playlist|album)\//i.test(q)) return true;
-  return false;
+  return /youtube\.com\/playlist\?list=[\w\-]+/i.test(q) ||
+         /music\.163\.com\/(playlist|album)\?id=\d+/i.test(q) ||
+         /open\.spotify\.com\/(playlist|album)\//i.test(q);
 }
 
 function onSearchInput() {
-  const q = document.getElementById('searchInput').value.trim();
-  const hint = document.getElementById('plHint');
-  const label = document.getElementById('dlBtnText');
-
+  const q = $('#searchInput').value.trim();
+  const hint = $('#plHint');
+  const label = $('#dlBtnText');
   if (isPlaylistUrl(q)) {
-    hint.style.display = 'flex';
-    hint.textContent = '🎵 Playlist URL detected — click Resolve to view tracks';
+    hint.classList.remove('hidden');
+    hint.textContent = '🎵 Playlist detected — click Resolve';
     label.textContent = 'Resolve';
   } else {
-    hint.style.display = 'none';
+    hint.classList.add('hidden');
     label.textContent = 'Download';
   }
 }
 
-async function handleSearchKey(e) {
-  if (e.key !== 'Enter') return;
-  const q = document.getElementById('searchInput').value.trim();
-  if (!q) return;
-  if (isPlaylistUrl(q)) { await handlePlaylistUrl(q); }
-  else { await startDownload(); }
+function onSearchFocus() {
+  renderSearchHistory();
+  $('#searchHistory').classList.add('search-history--open');
+}
+function onSearchBlur() {
+  setTimeout(() => $('#searchHistory').classList.remove('search-history--open'), 150);
 }
 
+/* ── Search History ─────────────────────────────────────────────────────── */
+function getHistory() {
+  try { return JSON.parse(localStorage.getItem('mm_history') || '[]'); }
+  catch (_) { return []; }
+}
+function addHistory(q) {
+  if (!q || q.length < 2) return;
+  let h = getHistory().filter(v => v !== q);
+  h.unshift(q);
+  if (h.length > 20) h = h.slice(0, 20);
+  localStorage.setItem('mm_history', JSON.stringify(h));
+}
+function removeHistory(q) {
+  let h = getHistory().filter(v => v !== q);
+  localStorage.setItem('mm_history', JSON.stringify(h));
+  renderSearchHistory();
+}
+function renderSearchHistory() {
+  const h = getHistory();
+  const el = $('#searchHistory');
+  if (h.length === 0) {
+    el.innerHTML = '<div class="search-history__empty">No recent searches</div>';
+    return;
+  }
+  el.innerHTML = h.map(q =>
+    `<div class="search-history__item" onmousedown="selectHistory('${escapeAttr(q)}')">
+      <span class="history-query">${escapeHtml(q)}</span>
+      <span class="history-remove" onmousedown="event.stopPropagation();removeHistory('${escapeAttr(q)}')">×</span>
+    </div>`
+  ).join('');
+}
+function selectHistory(q) {
+  $('#searchInput').value = q;
+  onSearchInput();
+  $('#searchHistory').classList.remove('search-history--open');
+  $('#searchInput').focus();
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Main Action: Download or Resolve Playlist
+   ═══════════════════════════════════════════════════════════════════════════ */
 async function handleMainAction() {
-  const q = document.getElementById('searchInput').value.trim();
-  if (!q) return toast('Please enter a search query', 'error');
-  if (isPlaylistUrl(q)) { await handlePlaylistUrl(q); }
-  else { await startDownload(); }
+  const q = $('#searchInput').value.trim();
+  if (!q) return toast('Enter a search query or URL', 'error');
+  addHistory(q);
+
+  if (isPlaylistUrl(q)) {
+    await handlePlaylistUrl(q);
+  } else {
+    await startDownload(q);
+    $('#searchInput').value = '';
+    $('#searchInput').focus();
+  }
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   Playlist
+   ═══════════════════════════════════════════════════════════════════════════ */
 async function handlePlaylistUrl(url) {
-  const btn = document.getElementById('dlBtn');
-  const text = document.getElementById('dlBtnText');
-  const spinner = document.getElementById('dlBtnSpinner');
-  btn.disabled = true;
-  text.textContent = 'Resolving...';
-  spinner.style.display = '';
-
+  setBtnLoading(true, 'Resolving...');
   try {
-    const body = new URLSearchParams({ url });
-    const r = await fetch('/api/playlist/info', { method: 'POST', body });
+    const r = await fetch('/api/playlist/info', { method: 'POST', body: new URLSearchParams({ url }) });
     const d = await r.json();
-    if (!d.ok) return toast('Failed: ' + (d.error || 'Could not resolve playlist'), 'error');
-
+    if (!d.ok) return toast('Resolve failed: ' + (d.error || ''), 'error');
     const pl = d.playlist;
     pl.tracks.forEach((t, i) => { t._idx = i + 1; t._status = 'pending'; t._file = ''; });
     STATE.playlist = pl;
-    document.getElementById('searchInput').value = '';
+    $('#searchInput').value = '';
     renderPlaylist();
-    toast('Resolved: ' + pl.title + ' (' + (pl.track_count || pl.tracks.length) + ' tracks)', 'success');
+    toast(`Resolved: ${pl.title} (${pl.track_count || pl.tracks.length} tracks)`, 'success');
   } catch (e) {
     toast('Connection failed: ' + e.message, 'error');
   } finally {
-    btn.disabled = false;
-    text.textContent = 'Resolve';
-    spinner.style.display = 'none';
+    setBtnLoading(false, 'Resolve');
     onSearchInput();
-    document.getElementById('searchInput').focus();
+    $('#searchInput').focus();
   }
 }
 
 function clearPlaylist() {
-  STATE.playlist = null;
-  STATE.playlistTaskId = null;
-  document.getElementById('playlistArea').style.display = 'none';
-  document.getElementById('searchInput').focus();
+  STATE.playlist = null; STATE.playlistTaskId = null;
+  $('#playlistArea').classList.add('hidden');
+  $('#searchInput').focus();
 }
 
 function renderPlaylist() {
-  const pl = STATE.playlist;
-  if (!pl) return;
-  document.getElementById('playlistArea').style.display = '';
-
+  const pl = STATE.playlist; if (!pl) return;
+  $('#playlistArea').classList.remove('hidden');
   const icon = pl.type === 'album' ? '💿' : '🎵';
-  document.getElementById('playlistBanner').innerHTML =
-    '<div class="pl-icon">' + icon + '</div>' +
-    '<div class="pl-info">' +
-    '<div class="pl-title">' + escapeHtml(pl.title || 'Playlist') + '</div>' +
-    '<div class="pl-meta">' + (pl.platform || '') + ' ' + (pl.type || 'playlist') + (pl.creator ? ' · ' + escapeHtml(pl.creator) : '') + '</div>' +
-    '</div>';
-
-  const tracks = pl.tracks || [];
-  document.getElementById('plTrackCount').textContent = tracks.length + ' tracks';
+  $('#playlistBanner').innerHTML =
+    `<div class="playlist-banner__icon">${icon}</div>
+     <div class="playlist-banner__info">
+       <div class="playlist-banner__title">${escapeHtml(pl.title || 'Playlist')}</div>
+       <div class="playlist-banner__meta">${pl.platform||''} ${pl.type||'playlist'}${pl.creator?' · '+escapeHtml(pl.creator):''}</div>
+     </div>`;
+  $('#plTrackCount').textContent = `${(pl.tracks || []).length} tracks`;
   updatePlSummary();
-
-  document.getElementById('playlistTrackList').innerHTML = tracks.map(function(t) {
-    var icons = { pending: '○', downloading: '◉', ok: '✓', fail: '✗' };
-    var cls = t._status || 'pending';
-    return '<div class="pl-track ' + (t._status === 'ok' ? 'done' : t._status === 'fail' ? 'failed' : '') + '" data-idx="' + t._idx + '">' +
-      '<span class="pl-num">' + t._idx + '</span>' +
-      '<span class="pl-status ' + cls + '">' + (icons[cls] || '○') + '</span>' +
-      '<span class="pl-title">' + escapeHtml(t.title || t.query || '') + '</span>' +
-      '<span class="pl-artist">' + escapeHtml(t.artist || '') + '</span>' +
-      '</div>';
+  const icons = { pending: '○', downloading: '◉', ok: '✓', fail: '✗' };
+  $('#playlistTrackList').innerHTML = (pl.tracks || []).map(t => {
+    const cls = t._status || 'pending';
+    return `<div class="pl-track pl-track--${cls==='ok'?'done':cls==='fail'?'fail':''}" data-idx="${t._idx}">
+      <span class="pl-track__num">${t._idx}</span>
+      <span class="pl-track__status ${cls}">${icons[cls]||'○'}</span>
+      <span class="pl-track__title">${escapeHtml(t.title||t.query||'')}</span>
+      <span class="pl-track__artist">${escapeHtml(t.artist||'')}</span>
+    </div>`;
   }).join('');
 }
 
 function updatePlSummary() {
-  var pl = STATE.playlist, tracks = (pl && pl.tracks) ? pl.tracks : [];
-  var ok = tracks.filter(function(t) { return t._status === 'ok'; }).length;
-  var fail = tracks.filter(function(t) { return t._status === 'fail'; }).length;
-  var el = document.getElementById('plSummary');
-  if (ok + fail > 0) {
-    el.style.display = '';
-    el.textContent = '✓ ' + ok + ' · ✗ ' + fail;
-  } else {
-    el.style.display = 'none';
-  }
+  const tracks = (STATE.playlist && STATE.playlist.tracks) ? STATE.playlist.tracks : [];
+  const ok = tracks.filter(t => t._status === 'ok').length;
+  const fail = tracks.filter(t => t._status === 'fail').length;
+  const el = $('#plSummary');
+  if (ok + fail > 0) { el.classList.remove('hidden'); el.textContent = `✓ ${ok} · ✗ ${fail}`; }
+  else { el.classList.add('hidden'); }
 }
 
 function updateTrackStatus(idx, status, file) {
-  var pl = STATE.playlist;
-  if (!pl) return;
-  var t = (pl.tracks || []).find(function(tr) { return tr._idx === idx; });
+  const pl = STATE.playlist; if (!pl) return;
+  const t = (pl.tracks || []).find(tr => tr._idx === idx);
   if (t) { t._status = status; if (file) t._file = file; }
-  var row = document.querySelector('.pl-track[data-idx="' + idx + '"]');
+  const row = document.querySelector(`.pl-track[data-idx="${idx}"]`);
   if (row) {
-    var icons = { pending: '○', downloading: '◉', ok: '✓', fail: '✗' };
-    var statusEl = row.querySelector('.pl-status');
-    statusEl.textContent = icons[status] || '○';
-    statusEl.className = 'pl-status ' + status;
-    row.className = 'pl-track ' + (status === 'ok' ? 'done' : status === 'fail' ? 'failed' : '');
+    const icons = { pending: '○', downloading: '◉', ok: '✓', fail: '✗' };
+    const s = row.querySelector('.pl-track__status');
+    s.textContent = icons[status] || '○';
+    s.className = 'pl-track__status ' + status;
+    row.className = `pl-track pl-track--${status==='ok'?'done':status==='fail'?'fail':''}`;
   }
   updatePlSummary();
 }
 
 async function downloadPlaylistAll() {
-  var pl = STATE.playlist;
-  if (!pl) return;
-
-  (pl.tracks || []).forEach(function(t) { t._status = 'pending'; t._file = ''; });
+  const pl = STATE.playlist; if (!pl) return;
+  (pl.tracks || []).forEach(t => { t._status = 'pending'; t._file = ''; });
   renderPlaylist();
-
-  var body = new URLSearchParams({
+  const body = new URLSearchParams({
     url: pl.url || pl.id || '',
-    fmt: document.getElementById('format').value,
-    bitrate: document.getElementById('bitrate').value,
-    quick: document.getElementById('plQuick').checked ? '1' : '0',
+    fmt: $('#format').value,
+    bitrate: $('#bitrate').value,
+    quick: $('#plQuick').checked ? '1' : '0',
     embed_thumbnail: '1',
     no_metadata: '0',
   });
-  var outDir = document.getElementById('outDir').value.trim();
-  if (outDir) body.append('output', outDir);
-  var proxy = document.getElementById('proxyUrl').value.trim();
-  if (proxy) body.append('proxy', proxy);
-
+  appendOptionalParams(body);
   try {
-    var r = await fetch('/api/playlist/download', { method: 'POST', body: body });
-    var d = await r.json();
+    const r = await fetch('/api/playlist/download', { method: 'POST', body });
+    const d = await r.json();
     if (!d.ok) return toast('Failed: ' + (d.error || ''), 'error');
-
-    var taskId = d.task_id;
-    STATE.playlistTaskId = taskId;
-    STATE.activeTasks[taskId] = { query: pl.title || 'Playlist', logs: [], status: 'resolving', progress: 0, isPlaylist: true };
+    STATE.playlistTaskId = d.task_id;
+    STATE.activeTasks[d.task_id] = { query: pl.title || 'Playlist', logs: [], status: 'resolving', progress: 0, isPlaylist: true };
     renderProgress();
-    connectWebSocket(taskId);
-  } catch (e) {
-    toast('Connection failed: ' + e.message, 'error');
-  }
+    connectWebSocket(d.task_id);
+  } catch (e) { toast('Connection error', 'error'); }
 }
 
-function updatePlQuickPill() {}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// Download (single)
-// ═══════════════════════════════════════════════════════════════════════════
-async function startDownload() {
-  const query = document.getElementById('searchInput').value.trim();
-  if (!query) return toast('Please enter a search query', 'error');
-
-  setDownloading(true);
-
-  var body = new URLSearchParams({
+/* ═══════════════════════════════════════════════════════════════════════════
+   Single Download
+   ═══════════════════════════════════════════════════════════════════════════ */
+async function startDownload(query) {
+  setBtnLoading(true);
+  const body = new URLSearchParams({
     query,
-    fmt: document.getElementById('format').value,
-    bitrate: document.getElementById('bitrate').value,
-    platform: document.getElementById('platform').value,
-    quick: document.getElementById('quick').checked ? '1' : '0',
+    fmt: $('#format').value,
+    bitrate: $('#bitrate').value,
+    platform: $('#platform').value,
+    quick: $('#quick').checked ? '1' : '0',
     index: '0',
     embed_thumbnail: '1',
     no_metadata: '0',
   });
-
-  var outDir = document.getElementById('outDir').value.trim();
-  if (outDir) body.append('output', outDir);
-  var proxy = document.getElementById('proxyUrl').value.trim();
-  if (proxy) body.append('proxy', proxy);
-
+  appendOptionalParams(body);
   try {
-    var r = await fetch('/api/download', { method: 'POST', body: body });
-    var d = await r.json();
+    const r = await fetch('/api/download', { method: 'POST', body });
+    const d = await r.json();
     if (!d.ok) {
-      setDownloading(false);
-      return toast('Failed: ' + (d.error || 'unknown error'), 'error');
+      setBtnLoading(false);
+      return toast('Failed: ' + (d.error || 'unknown'), 'error');
     }
-
-    var taskId = d.task_id;
-    STATE.activeTasks[taskId] = { query, logs: [], status: 'downloading', progress: 0 };
+    STATE.activeTasks[d.task_id] = { query, logs: [], status: 'downloading', progress: 0 };
     renderProgress();
-    connectWebSocket(taskId);
-
-    document.getElementById('searchInput').value = '';
-    document.getElementById('searchInput').focus();
+    connectWebSocket(d.task_id);
   } catch (e) {
-    toast('Connection failed: ' + e.message, 'error');
-    setDownloading(false);
+    toast('Connection error', 'error');
+  } finally {
+    setBtnLoading(false);
   }
 }
 
-function setDownloading(active) {
-  const btn = document.getElementById('dlBtn');
-  const text = document.getElementById('dlBtnText');
-  const spinner = document.getElementById('dlBtnSpinner');
-  btn.disabled = active;
-  text.style.display = active ? 'none' : '';
-  spinner.style.display = active ? '' : 'none';
+function appendOptionalParams(body) {
+  const out = $('#outDir').value.trim();
+  if (out) body.append('output', out);
+  const proxy = $('#proxyUrl').value.trim();
+  if (proxy) body.append('proxy', proxy);
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// Cancel
-// ═══════════════════════════════════════════════════════════════════════════
+function setBtnLoading(loading, text) {
+  const btn = $('#dlBtn'), label = $('#dlBtnText'), spinner = $('#dlBtnSpinner');
+  btn.disabled = loading;
+  label.style.display = loading ? 'none' : '';
+  spinner.style.display = loading ? '' : 'none';
+  if (text) label.textContent = text;
+}
+
+function updateQuickPill() {
+  $('#quickPill').classList.toggle('toggle-pill--on', $('#quick').checked);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Cancel
+   ═══════════════════════════════════════════════════════════════════════════ */
 async function cancelTask(taskId) {
   try {
     const item = document.querySelector(`.progress-item[data-task="${taskId}"]`);
-    if (item) item.classList.add('cancelling');
-
+    if (item) item.classList.add('progress-item--cancelling');
     const r = await fetch(`/api/download/${taskId}/cancel`, { method: 'POST' });
     const d = await r.json();
-    if (d.ok) {
-      toast('Cancelling ' + taskId, 'success');
-    } else {
-      toast(d.message, 'error');
-    }
-  } catch (e) {
-    toast('Cancel failed', 'error');
-  }
+    toast(d.ok ? 'Cancelling...' : d.message, d.ok ? 'success' : 'error');
+  } catch (_) { toast('Cancel failed', 'error'); }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// WebSocket Progress
-// ═══════════════════════════════════════════════════════════════════════════
+/* ═══════════════════════════════════════════════════════════════════════════
+   WebSocket Progress
+   ═══════════════════════════════════════════════════════════════════════════ */
 function connectWebSocket(taskId) {
   const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
   let retries = 0;
@@ -1544,402 +1556,306 @@ function connectWebSocket(taskId) {
     const ws = new WebSocket(`${proto}//${location.host}/ws/progress/${taskId}`);
 
     ws.onmessage = (e) => {
-      retries = 0; // reset on successful message
+      retries = 0;
       const msg = JSON.parse(e.data);
       const task = STATE.activeTasks[taskId];
       if (!task) return;
 
-      if (msg.type === 'log') {
-        task.logs.push(msg.data);
-        if (task.logs.length > 100) task.logs.shift();
-        const m = msg.data?.match(/(\d{1,3})\.?\d*%/);
-        if (m) task.progress = parseInt(m[1]);
-      } else if (msg.type === 'status') {
-        task.status = msg.data;
-      } else if (msg.type === 'playlist_progress') {
-        var pp = msg.data;
-        if (pp.total > 0) task.progress = Math.round((pp.current / pp.total) * 100);
-        task.status = pp.current + '/' + pp.total;
-      } else if (msg.type === 'playlist_track_result') {
-        var pr = msg.data;
-        updateTrackStatus(pr.current, pr.ok ? 'ok' : 'fail', pr.file);
-        task.logs.push((pr.ok ? '[OK] ' : '[FAIL] ') + (pr.track ? pr.track.title || pr.track.query : ''));
-        if (task.logs.length > 100) task.logs.shift();
-      } else if (msg.type === 'result') {
-        task.result = msg.data;
-      } else if (msg.type === 'done') {
-        task.status = task.result?.ok ? 'success' : 'error';
-        task.progress = task.result?.ok ? 100 : 0;
-        task.error = task.result?.error || '';
-        if (task.isPlaylist && task.result) {
-          task.query = 'Playlist: ' + (task.result.playlist_title || '') + ' (' + (task.result.succeeded || 0) + '/' + (task.result.total || 0) + ')';
-        }
-        ws.close();
-        setDownloading(false);
-        refreshFiles();
-      } else if (msg.type === 'playlist_info') {
-        // playlist already resolved on server side
+      switch (msg.type) {
+        case 'log':
+          task.logs.push(msg.data);
+          if (task.logs.length > 100) task.logs.shift();
+          const m = msg.data?.match(/(\d{1,3})\.?\d*%/);
+          if (m) task.progress = parseInt(m[1]);
+          break;
+        case 'status': task.status = msg.data; break;
+        case 'playlist_progress':
+          const pp = msg.data;
+          if (pp.total > 0) task.progress = Math.round((pp.current / pp.total) * 100);
+          task.status = pp.current + '/' + pp.total;
+          break;
+        case 'playlist_track_result':
+          const pr = msg.data;
+          updateTrackStatus(pr.current, pr.ok ? 'ok' : 'fail', pr.file);
+          task.logs.push((pr.ok ? '[OK] ' : '[FAIL] ') + (pr.track ? pr.track.title || pr.track.query : ''));
+          if (task.logs.length > 100) task.logs.shift();
+          break;
+        case 'result': task.result = msg.data; break;
+        case 'done':
+          task.status = task.result?.ok ? 'success' : 'error';
+          task.progress = task.result?.ok ? 100 : 0;
+          task.error = task.result?.error || '';
+          if (task.isPlaylist && task.result) {
+            task.query = 'Playlist: ' + (task.result.playlist_title || '') + ' (' + (task.result.succeeded || 0) + '/' + (task.result.total || 0) + ')';
+          }
+          ws.close();
+          refreshFiles();
+          break;
       }
-
       renderProgress();
     };
 
-    ws.onerror = () => { /* handled by onclose */ };
-
+    ws.onerror = () => {};
     ws.onclose = () => {
       const task = STATE.activeTasks[taskId];
       if (!task) return;
-
-      // If task is already done/error, just poll for result
       if (task.status === 'success' || task.status === 'error') {
-        _pollResult(taskId);
+        pollResult(taskId);
         setTimeout(() => { delete STATE.activeTasks[taskId]; renderProgress(); }, 30000);
         return;
       }
-
-      // Try to reconnect
       if (retries < MAX_RETRIES) {
         retries++;
-        task.status = 'reconnecting (' + retries + '/' + MAX_RETRIES + ')';
+        task.status = `reconnecting (${retries}/${MAX_RETRIES})`;
         renderProgress();
         setTimeout(_connect, 1500 * retries);
       } else {
         task.status = 'error';
-        task.error = 'WebSocket connection lost after retries';
-        setDownloading(false);
-        _pollResult(taskId);
+        task.error = 'WebSocket lost';
+        pollResult(taskId);
         setTimeout(() => { delete STATE.activeTasks[taskId]; renderProgress(); }, 30000);
       }
     };
   }
-
   _connect();
 }
 
-function _pollResult(taskId) {
+function pollResult(taskId) {
   fetch(`/api/download/${taskId}/result`)
     .then(r => r.json())
     .then(d => {
       const task = STATE.activeTasks[taskId];
       if (task && d.done && d.result) {
         task.status = d.result.ok ? 'success' : 'error';
-        task.result = d.result;
-        task.error = d.result?.error || '';
+        task.result = d.result; task.error = d.result?.error || '';
         task.progress = d.result.ok ? 100 : 0;
         renderProgress();
         refreshFiles();
       }
-    })
-    .catch(() => {});
+    }).catch(() => {});
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// Render Progress
-// ═══════════════════════════════════════════════════════════════════════════
+/* ═══════════════════════════════════════════════════════════════════════════
+   Render Progress
+   ═══════════════════════════════════════════════════════════════════════════ */
 function renderProgress() {
-  const area = document.getElementById('progressArea');
+  const area = $('#progressArea');
   const tasks = Object.entries(STATE.activeTasks);
-
   if (tasks.length === 0) {
     area.innerHTML = `<div class="empty-state">
-      <div class="empty-icon">🎶</div>
-      <p>No active downloads<br><span style="font-size:0.78rem;color:var(--text-muted)">Search for a song above to get started</span></p>
+      <div class="empty-state__icon">🎧</div>
+      <p>Ready to download<br><span style="font-size:var(--fs-xs);color:var(--text-muted)">Search above to begin</span></p>
     </div>`;
     return;
   }
-
   area.innerHTML = tasks.map(([id, t]) => {
     const isDone = t.status === 'success';
     const isError = t.status === 'error';
     const isCancelling = t.status === 'cancelling';
     const isActive = !isDone && !isError && !isCancelling;
-
-    const barClass = isDone ? 'done' : (isError || isCancelling) ? 'error' : 'active';
-    const iconHtml = isDone ? '<span class="done-icon">✓</span>'
-                   : isError ? '<span class="error-icon">✗</span>'
-                   : isCancelling ? '<span class="error-icon">⏹</span>'
-                   : '<span class="spinner"></span>';
-
-    const statusText = isDone ? `✓ Downloaded — ${t.result?.file || 'completed'}`
-                     : isCancelling ? `⏹ Cancelling...`
-                     : isError ? `✗ ${t.error || 'Failed'}`
-                     : '';
-
+    const barClass = isDone ? 'progress-bar__fill--done' : (isError || isCancelling) ? 'progress-bar__fill--error' : 'progress-bar__fill--active';
+    const itemClass = isDone ? 'progress-item--done' : (isError || isCancelling) ? 'progress-item--error' : '';
+    const iconHtml = isDone ? '<span class="icon--done">✓</span>'
+      : isError ? '<span class="icon--error">✗</span>'
+      : isCancelling ? '<span class="icon--error">⏹</span>'
+      : '<span class="spinner"></span>';
     const statusHtml = isActive
-      ? `<span class="music-bars"><span class="bar"></span><span class="bar"></span><span class="bar"></span><span class="bar"></span><span class="bar"></span></span> ${t.status || 'Preparing...'}`
-      : `<span>${statusText}</span>`;
-
-    const statusCls = isDone ? 'success' : (isError || isCancelling) ? 'error' : 'pending';
-
+      ? `<div class="equalizer"><span class="equalizer__bar"></span><span class="equalizer__bar"></span><span class="equalizer__bar"></span><span class="equalizer__bar"></span><span class="equalizer__bar"></span><span class="equalizer__bar"></span><span class="equalizer__bar"></span></div> ${t.status || 'Preparing...'}`
+      : isDone ? `✓ ${t.result?.file || 'Complete'}`
+      : isCancelling ? '⏹ Cancelling...'
+      : `✗ ${t.error || 'Failed'}`;
+    const footerCls = isDone ? 'task-status-footer--ok' : (isError || isCancelling) ? 'task-status-footer--err' : 'task-status-footer--pending';
     const logsHtml = t.logs.slice(-25).map(l => {
       let cls = '';
-      if (/error|fail|❌|✗/i.test(l)) cls = 'error';
-      else if (/warn|⚠/i.test(l)) cls = 'warn';
-      else if (/download|extract|\[/i.test(l)) cls = 'highlight';
-      return `<div class="task-log-line ${cls}">${escapeHtml(l)}</div>`;
+      if (/error|fail|❌|✗/i.test(l)) cls = 'log-line--err';
+      else if (/warn|⚠/i.test(l)) cls = 'log-line--warn';
+      else if (/download|extract|\[/i.test(l)) cls = 'log-line--hl';
+      return `<div class="log-line ${cls}">${escapeHtml(l)}</div>`;
     }).join('');
-
-    const cancelBtn = isActive
-      ? `<button class="btn btn-sm btn-danger" onclick="cancelTask('${id}')" style="padding:4px 12px;font-size:0.7rem">✕ Cancel</button>`
-      : '';
-
-    return `<div class="progress-item" data-task="${id}">
+    const cancelBtn = isActive ? `<button class="btn btn--danger btn--xs" onclick="cancelTask('${id}')">✕ Cancel</button>` : '';
+    return `<div class="progress-item ${itemClass}" data-task="${id}">
       <div class="task-header">
-        <span class="task-query">${iconHtml} ${escapeHtml(t.query)}</span>
+        <span class="task-query" title="${escapeHtml(t.query)}">${iconHtml} ${escapeHtml(t.query)}</span>
         ${cancelBtn}
       </div>
-      <div class="progress-bar-outer">
-        <div class="progress-bar-inner ${barClass}" style="width:${t.progress || 0}%"></div>
-      </div>
+      <div class="progress-bar"><div class="progress-bar__fill ${barClass}" style="width:${t.progress||0}%"></div></div>
       <div class="task-logs">${logsHtml || '<span style="color:var(--text-muted)">Initializing...</span>'}</div>
-      <div class="task-status-footer ${statusCls}">${statusHtml}</div>
+      <div class="task-status-footer ${footerCls}">${statusHtml}</div>
     </div>`;
   }).join('');
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// File List
-// ═══════════════════════════════════════════════════════════════════════════
+/* ═══════════════════════════════════════════════════════════════════════════
+   File List
+   ═══════════════════════════════════════════════════════════════════════════ */
 async function refreshFiles() {
   try {
     const r = await fetch('/api/downloads');
     const d = await r.json();
     STATE.files = d.files || [];
     renderFiles(d);
-  } catch (_) {
-    if (!STATE.loaded) renderFiles(null);
-  }
+  } catch (_) { if (!STATE.loaded) renderFiles(null); }
 }
 
 function renderFiles(d) {
-  const list = document.getElementById('fileList');
-  const stat = document.getElementById('filesStat');
-  const clearBtn = document.getElementById('clearAllBtn');
-
+  const list = $('#fileList');
+  const stat = $('#filesStat');
+  const clearBtn = $('#clearAllBtn');
   if (d) {
-    const totalFiles = d.total_files || STATE.files.length;
-    const totalSize = d.total_size_mb || 0;
-    if (totalFiles > 0) {
-      stat.style.display = '';
-      stat.textContent = `${totalFiles} files · ${totalSize} MB`;
-      clearBtn.style.display = '';
-    } else {
-      stat.style.display = 'none';
-      clearBtn.style.display = 'none';
-    }
+    const n = d.total_files || STATE.files.length;
+    const s = d.total_size_mb || 0;
+    if (n > 0) { stat.classList.remove('hidden'); stat.textContent = `${n} files · ${s} MB`; clearBtn.classList.remove('hidden'); }
+    else { stat.classList.add('hidden'); clearBtn.classList.add('hidden'); }
   }
-
   if (STATE.files.length === 0) {
-    stat.style.display = 'none';
-    clearBtn.style.display = 'none';
+    stat.classList.add('hidden'); clearBtn.classList.add('hidden');
     list.innerHTML = `<div class="empty-state">
-      <div class="empty-icon">📂</div>
-      <p>Your music library is empty<br><span style="font-size:0.78rem;color:var(--text-muted)">Downloads appear in ~/Downloads/MelodyMine/</span></p>
+      <div class="empty-state__icon">📀</div>
+      <p>Library is empty<br><span style="font-size:var(--fs-xs);color:var(--text-muted)">Downloads go to ~/Downloads/MelodyMine/</span></p>
     </div>`;
     return;
   }
-
   list.innerHTML = STATE.files.map(f => {
     const ext = (f.name.split('.').pop() || '').toLowerCase();
-    const iconExt = ['mp3', 'flac', 'm4a'].includes(ext) ? ext : 'default';
-    const icons = { mp3: '🎧', flac: '✨', m4a: '🍎', default: '🎵' };
-    return `<div class="file-item" style="animation: slideIn 0.25s ease-out">
-      <div class="file-icon ${iconExt}">${icons[iconExt]}</div>
-      <div class="file-info">
-        <div class="file-name" title="${escapeHtml(f.name)}">${escapeHtml(f.name)}</div>
-        <div class="file-meta">
-          <span>${f.size_mb} MB</span>
-          <span>${ext.toUpperCase()}</span>
-        </div>
+    const iconExt = ['mp3', 'flac', 'm4a', 'opus'].includes(ext) ? ext : 'def';
+    const icons = { mp3: '🎧', flac: '✨', m4a: '🍎', opus: '🎼', def: '🎵' };
+    return `<div class="file-item" style="animation:slideUp 0.2s var(--ease-out)">
+      <div class="file-item__icon file-icon--${iconExt}">${icons[iconExt]}</div>
+      <div class="file-item__info">
+        <div class="file-item__name" title="${escapeHtml(f.name)}">${escapeHtml(f.name)}</div>
+        <div class="file-item__meta"><span>${f.size_mb} MB</span><span>${ext.toUpperCase()}</span></div>
       </div>
-      <button class="file-del" title="Remove record (keeps file)" data-name="${escapeHtml(f.name)}">×</button>
+      <button class="btn--icon danger" data-name="${escapeAttr(f.name)}" title="Hide record">×</button>
     </div>`;
   }).join('');
-
-  // Attach delete handlers safely (avoids inline onclick with special chars)
-  list.querySelectorAll('.file-del').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const name = btn.getAttribute('data-name');
-      if (name) hideOneFile(name);
-    });
+  list.querySelectorAll('.btn--icon.danger').forEach(btn => {
+    btn.addEventListener('click', () => { const n = btn.getAttribute('data-name'); if (n) hideOneFile(n); });
   });
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// Open Folder
-// ═══════════════════════════════════════════════════════════════════════════
+/* ═══════════════════════════════════════════════════════════════════════════
+   File Actions
+   ═══════════════════════════════════════════════════════════════════════════ */
 async function openFolder() {
   try {
     const r = await fetch('/api/open-folder', { method: 'POST' });
     const d = await r.json();
-    if (d.ok) toast('Opened: ' + d.path, 'success');
-    else toast('Folder: ' + d.path + ' (open failed)', 'error');
-  } catch (e) {
-    toast('Cannot open folder from browser', 'error');
-  }
+    toast(d.ok ? `Opened: ${d.path}` : `Folder: ${d.path}`, d.ok ? 'success' : 'error');
+  } catch (_) { toast('Cannot open from browser', 'error'); }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// Clear / Hide Records (files kept on disk)
-// ═══════════════════════════════════════════════════════════════════════════
 async function hideOneFile(name) {
   try {
     const r = await fetch(`/api/downloads/records/${encodeURIComponent(name)}`, { method: 'DELETE' });
-    const d = await r.json();
-    if (d.ok) {
-      toast(`Hidden: ${name}`, 'success');
-      refreshFiles();
-    } else {
-      toast('Failed to hide record', 'error');
-    }
-  } catch (e) {
-    toast('Connection error', 'error');
-  }
+    if ((await r.json()).ok) { toast(`Hidden: ${name}`, 'success'); refreshFiles(); }
+    else toast('Failed', 'error');
+  } catch (_) { toast('Connection error', 'error'); }
 }
 
 async function clearAllRecords() {
-  if (!confirm('Clear all download records?\n\nFiles will be kept on disk — only the list is cleared.')) return;
+  if (!confirm('Clear download records?\nFiles kept on disk — only the list is cleared.')) return;
   try {
     const r = await fetch('/api/downloads/records', { method: 'DELETE' });
     const d = await r.json();
-    if (d.ok) {
-      toast(`Cleared ${d.hidden_count} records`, 'success');
-      await refreshFiles();
-    } else {
-      toast('Failed to clear records', 'error');
-    }
-  } catch (e) {
-    toast('Connection error', 'error');
-  }
+    if (d.ok) { toast(`Cleared ${d.hidden_count} records`, 'success'); refreshFiles(); }
+    else toast('Failed', 'error');
+  } catch (_) { toast('Connection error', 'error'); }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// Settings & Config
-// ═══════════════════════════════════════════════════════════════════════════
+/* ═══════════════════════════════════════════════════════════════════════════
+   Settings
+   ═══════════════════════════════════════════════════════════════════════════ */
 async function loadConfig() {
   try {
-    // Fetch both env and stored config
-    const [envR, cfgR] = await Promise.all([
-      fetch('/api/config/env'),
-      fetch('/api/config'),
-    ]);
+    const [envR, cfgR] = await Promise.all([fetch('/api/config/env'), fetch('/api/config')]);
     const env = await envR.json();
     const cfg = await cfgR.json();
 
-    // ── Proxy ──
     const proxy = cfg.proxy || env.all_proxy || env.http_proxy || '';
     if (proxy) {
-      document.getElementById('proxyUrl').value = proxy;
-      document.getElementById('proxyHint').style.display = '';
-      document.getElementById('proxyHint').textContent = cfg.proxy ? 'Stored in config' : 'From environment';
+      $('#proxyUrl').value = proxy;
+      showHint('proxyHint', cfg.proxy ? 'Stored' : 'From env');
     }
 
-    // ── Output dir ──
     const out = cfg.output_dir || env.output_dir || '';
-    if (out) {
-      document.getElementById('outDir').value = out;
-      document.getElementById('outDirHint').style.display = '';
-      document.getElementById('outDirHint').textContent = cfg.output_dir ? 'Stored in config' : 'From environment';
-    }
+    if (out) { $('#outDir').value = out; showHint('outDirHint', cfg.output_dir ? 'Stored' : 'From env'); }
 
-    // ── Soulseek Username ──
     const user = cfg.soulseek_username || '';
-    if (user) {
-      document.getElementById('slskUser').value = user;
-      document.getElementById('slskHint').style.display = '';
-      document.getElementById('slskHint').textContent = 'Stored in config';
-    }
+    if (user) { $('#slskUser').value = user; showHint('slskHint', 'Stored'); }
 
-    // ── Soulseek Password ──
     if (cfg.soulseek_password_set) {
-      document.getElementById('slskPass').placeholder = '•••••••• (saved)';
-      document.getElementById('slskPassHint').style.display = '';
-      document.getElementById('slskPassHint').textContent = 'Password saved — leave blank to keep current';
+      $('#slskPass').placeholder = '•••••••• (saved)';
+      showHint('slskPassHint', 'Leave blank to keep current');
     } else {
-      document.getElementById('slskPassHint').style.display = '';
-      document.getElementById('slskPassHint').textContent = 'Leave blank if not using Soulseek';
+      showHint('slskPassHint', 'Not set');
     }
 
-    // If env var is set but config doesn't have it, show hint
     if (env.slsk_user && !user) {
-      document.getElementById('slskHint').style.display = '';
-      document.getElementById('slskHint').textContent = env.slsk_pass_set
-        ? '✓ Credentials set via environment variables (override by saving below)'
-        : '⚠ SLSK_USERNAME set but SLSK_PASSWORD missing in env';
+      showHint('slskHint', env.slsk_pass_set ? '✓ From env vars' : '⚠ USER set, PASS missing');
     }
   } catch (_) {}
 }
 
+function showHint(id, text) {
+  const el = $('#' + id);
+  if (el) { el.classList.remove('hidden'); el.textContent = text; }
+}
+
 async function saveConfig() {
-  const btn = document.getElementById('saveConfigBtn');
-  const saved = document.getElementById('configSaved');
-  btn.disabled = true;
-  btn.textContent = 'Saving...';
-
+  const btn = $('#saveConfigBtn');
+  const saved = $('#configSaved');
+  btn.disabled = true; btn.textContent = 'Saving...';
   const body = new URLSearchParams();
-  const user = document.getElementById('slskUser').value.trim();
-  const pass = document.getElementById('slskPass').value;
-  const out = document.getElementById('outDir').value.trim();
-  const proxy = document.getElementById('proxyUrl').value.trim();
-
+  const user = $('#slskUser').value.trim();
+  const pass = $('#slskPass').value;
+  const out = $('#outDir').value.trim();
+  const proxy = $('#proxyUrl').value.trim();
   if (user) body.append('soulseek_username', user);
   if (pass) body.append('soulseek_password', pass);
   if (out) body.append('output_dir', out);
   if (proxy) body.append('proxy', proxy);
-
   try {
     const r = await fetch('/api/config', { method: 'POST', body });
-    const d = await r.json();
-    if (d.ok) {
-      // Clear password field for security
-      document.getElementById('slskPass').value = '';
-      if (pass) document.getElementById('slskPass').placeholder = '•••••••• (saved)';
-      // Show success indicator
-      saved.style.display = '';
+    if ((await r.json()).ok) {
+      $('#slskPass').value = '';
+      if (pass) $('#slskPass').placeholder = '•••••••• (saved)';
       saved.style.opacity = '1';
       setTimeout(() => { saved.style.opacity = '0'; }, 2000);
       toast('Settings saved', 'success');
-      await loadConfig(); // refresh hints
-    } else {
-      toast('Failed to save', 'error');
-    }
-  } catch (e) {
-    toast('Connection error', 'error');
-  } finally {
-    btn.disabled = false;
-    btn.textContent = '💾 Save Settings';
-  }
+      loadConfig();
+    } else toast('Save failed', 'error');
+  } catch (_) { toast('Connection error', 'error'); }
+  finally { btn.disabled = false; btn.textContent = 'Save'; }
 }
 
-function updateQuickPill() {
-  const pill = document.getElementById('quickPill');
-  const checked = document.getElementById('quick').checked;
-  pill.classList.toggle('checked', checked);
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// Utils
-// ═══════════════════════════════════════════════════════════════════════════
+/* ═══════════════════════════════════════════════════════════════════════════
+   Utils
+   ═══════════════════════════════════════════════════════════════════════════ */
 function escapeHtml(s) {
   return (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
-
-function toast(msg, type) {
-  const el = document.createElement('div');
-  el.className = 'toast ' + (type || '');
-  el.innerHTML = type === 'error' ? '⚠ ' + msg : type === 'success' ? '✓ ' + msg : msg;
-  document.body.appendChild(el);
-  setTimeout(() => {
-    el.style.opacity = '0';
-    el.style.transform = 'translateX(-50%) translateY(-8px)';
-    el.style.transition = 'all 0.3s ease';
-    setTimeout(() => el.remove(), 300);
-  }, 3000);
+function escapeAttr(s) {
+  return (s || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// Boot
-// ═══════════════════════════════════════════════════════════════════════════
+function toast(msg, type) {
+  const container = $('#toastContainer');
+  const el = document.createElement('div');
+  el.className = `toast toast--${type || ''}`;
+  const icons = { error: '⚠', success: '✓', info: 'ℹ' };
+  el.textContent = `${icons[type] || ''} ${msg}`;
+  container.appendChild(el);
+  setTimeout(() => {
+    el.style.opacity = '0';
+    el.style.transform = 'translateX(30px)';
+    el.style.transition = 'all 0.3s var(--ease-out)';
+    setTimeout(() => el.remove(), 300);
+  }, 3500);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Boot
+   ═══════════════════════════════════════════════════════════════════════════ */
 init();
 </script>
 
