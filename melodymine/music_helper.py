@@ -111,7 +111,6 @@ def _build_ytdlp_cmd(
         "-f", "bestaudio/best",
         "-x",
         "--audio-format", fmt,
-        "--embed-metadata",
         "-o", os.path.join(output, "%(title)s.%(ext)s"),
         "--no-warnings",
         "--newline",
@@ -339,18 +338,44 @@ enhance_metadata = _metadata_mod.enhance_metadata
 verify_audio_file = _metadata_mod.verify_audio_file
 
 
-def _finalize_download_result(result, output):
+def _verify_output_grew(output_dir, before_snapshot):
+    """Return True if new audio files appeared in ``output_dir``.
+
+    Compares the current audio file listing against a snapshot taken before
+    download, so yt-dlp returning exit-code-0 but downloading zero items is
+    caught as a failure.
+    """
+    after = set(_list_audio_files(output_dir))
+    before = set(before_snapshot or [])
+    return bool(after - before)
+
+
+def _finalize_download_result(result, output, before_snapshot=None):
     """Post-download: verify file integrity and enrich result with audio info.
 
     Called on every successful download path in ``cmd_download`` so all
     platforms get the same verification treatment.
+
+    If ``before_snapshot`` is provided and no new audio files appeared, the
+    result is flipped to ``ok: False`` — yt-dlp exit code 0 does NOT guarantee
+    a file was actually downloaded.
     """
     if not result.get("ok"):
+        return result
+
+    # Check whether any new audio file was actually created
+    if before_snapshot is not None and not _verify_output_grew(output, before_snapshot):
+        result["ok"] = False
+        result["error"] = "Download reported success but no new audio files were created (yt-dlp exit 0 with 0 items)"
+        print(f"  [!] {result['error']}")
         return result
 
     # Find the latest downloaded file
     filepath = _metadata_mod.find_downloaded_file(output)
     if not filepath:
+        result["ok"] = False
+        result["error"] = "No audio file found after download"
+        print(f"  [!] {result['error']}")
         return result
 
     verify = verify_audio_file(filepath)
@@ -557,11 +582,16 @@ def _resolve_auto_fmt(codec, user_bitrate):
 # ─── Bilibili API Direct Download (Tier 2: bypasses yt-dlp 412) ──────────
 
 def _bili_api_download(bvid, output, fmt="flac", bitrate=None, python=None):
-    """Download audio directly from Bilibili's playurl API, bypassing yt-dlp entirely."""
+    """Download audio directly from Bilibili's playurl API, bypassing yt-dlp entirely.
+
+    Returns (success: bool, file_path: str | None) so the caller can pass
+    the exact path to ``enhance_metadata``, avoiding the fragile
+    find-by-snapshot-diff logic in ``find_downloaded_file``.
+    """
     if python is None:
         python, _ = _find_music_python()
     if not python:
-        return False
+        return False, None
     import urllib.request
     print("    -> yt-dlp blocked (412) - trying Bilibili API direct download...")
 
@@ -569,7 +599,7 @@ def _bili_api_download(bvid, output, fmt="flac", bitrate=None, python=None):
     audio_url, codec = _bili_resolve_audio(bvid, python=python)
     if not audio_url:
         print("    [!] Could not resolve Bilibili audio stream (no audio streams)")
-        return False
+        return False, None
     print(f"    Audio stream found (codec: {codec or '?'})")
 
     # Resolve auto format from the real codec.
@@ -596,12 +626,12 @@ def _bili_api_download(bvid, output, fmt="flac", bitrate=None, python=None):
     except Exception as e:
         print(f"    [!] Download failed: {e}")
         if os.path.isfile(raw_path): os.remove(raw_path)
-        return False
+        return False, None
     file_size_mb = os.path.getsize(raw_path) / (1024 * 1024)
     print(f"    Downloaded: {file_size_mb:.1f} MB")
     if file_size_mb < 0.1:
         os.remove(raw_path)
-        return False
+        return False, None
 
     # Step 4: Convert (or keep raw if target is m4a / lossless flac from flac source)
     ffmpeg_exe = find_ffmpeg(python)
@@ -609,11 +639,12 @@ def _bili_api_download(bvid, output, fmt="flac", bitrate=None, python=None):
         final = os.path.join(output, f"bilibili_audio_{aid}.m4a")
         if raw_path != final: os.rename(raw_path, final)
         print(f"    Saved: {final}")
-        return True
+        return True, final
 
     print(f"    Converting to {fmt}...")
     final_path = os.path.join(output, f"bilibili_audio_{aid}.{fmt}")
-    return _ffmpeg_convert(ffmpeg_exe, raw_path, final_path, fmt, bitrate)
+    ok = _ffmpeg_convert(ffmpeg_exe, raw_path, final_path, fmt, bitrate)
+    return (True, final_path) if ok else (False, None)
 
 
 # ─── Commands ────────────────────────────────────────────────────────────
@@ -983,23 +1014,28 @@ def _soulseek_with_fallback(py, query, output, fmt, proxy, bitrate, index,
                             embed_thumbnail, no_metadata, cookies, before,
                             slsk_user, slsk_pass, quick, fallback_platform):
     """Try Soulseek first; if it fails or --quick, fall back to the named platform."""
-    if not quick:
-        print("=" * 60)
-        print(f"  Platform : Soulseek (P2P) — primary")
-        print(f"  Query    : {query}")
-        print(f"  Format   : {fmt}")
-        print(f"  Output   : {output}")
-        print("=" * 60)
-        print()
-        result = _try_soulseek_once(
-            query, output, fmt, bitrate, embed_thumbnail, no_metadata,
-            slsk_user=slsk_user, slsk_pass=slsk_pass, proxy=proxy,
-        )
-        if result.get("ok"):
-            return result
-        print(f"\n  Soulseek failed. Falling back to {fallback_platform}...")
-    else:
+    if quick:
         print(f"  [--quick] Soulseek skipped, going straight to {fallback_platform}...")
+        return None
+
+    if not slsk_user or not slsk_pass:
+        print(f"  [!] Soulseek credentials not set — skipped, going to {fallback_platform}...")
+        return None
+
+    print("=" * 60)
+    print(f"  Platform : Soulseek (P2P) — primary")
+    print(f"  Query    : {query}")
+    print(f"  Format   : {fmt}")
+    print(f"  Output   : {output}")
+    print("=" * 60)
+    print()
+    result = _try_soulseek_once(
+        query, output, fmt, bitrate, embed_thumbnail, no_metadata,
+        slsk_user=slsk_user, slsk_pass=slsk_pass, proxy=proxy,
+    )
+    if result.get("ok"):
+        return result
+    print(f"\n  Soulseek failed. Falling back to {fallback_platform}...")
     return None  # signal that fallback is needed
 
 
@@ -1020,6 +1056,7 @@ def _download_bilibili(
         return slsk_result
 
     # Tier 2: Bilibili wbi search + yt-dlp download
+    print("\n━━━ Soulseek done → continuing with Bilibili ━━━")
     print("=" * 60)
     print(f"  Platform : Bilibili (direct, no proxy)")
     print(f"  Query    : {query}")
@@ -1032,8 +1069,8 @@ def _download_bilibili(
     results = bili_client.search(query, limit=max(index, 5))
     if not results:
         print("\n  Bilibili search failed (rate-limited or network issue).")
-        print("  Falling back to YouTube...")
-        return _do_youtube_download(
+        print("  Falling back to YouTube Music...")
+        return _do_ytmusic_download(
             py, query, output, fmt, proxy, bitrate, index, embed_thumbnail,
             no_metadata=no_metadata, cookies=cookies, before_snapshot=before,
         )
@@ -1058,7 +1095,8 @@ def _download_bilibili(
         print(f"  [auto] {reason}")
 
     if _ytdlp_download(py, url, output, actual_fmt, actual_bitrate, embed_thumbnail,
-                       bili_ua=True, index=1, cookies=cookies):
+                       bili_ua=True, index=1, cookies=cookies) and \
+       _verify_output_grew(output, before):
         if not no_metadata:
             enhance_metadata(query, item["title"], output, embed_thumbnail=embed_thumbnail, before_snapshot=before)
         print(f"\n[OK] Download complete!")
@@ -1070,9 +1108,10 @@ def _download_bilibili(
 
     # Tier 3: Bilibili API direct download
     print(f"\n  yt-dlp download failed (likely 412 Precondition Failed).")
-    if _bili_api_download(bvid, output, actual_fmt, actual_bitrate, python=py):
+    bili_ok, bili_path = _bili_api_download(bvid, output, actual_fmt, actual_bitrate, python=py)
+    if bili_ok:
         if not no_metadata:
-            enhance_metadata(query, item["title"], output, embed_thumbnail=embed_thumbnail, before_snapshot=before)
+            enhance_metadata(query, item["title"], output, embed_thumbnail=embed_thumbnail, filepath=bili_path)
         print(f"\n[OK] Download complete (via Bilibili API direct)!")
         print(f"     Files saved to: {output}")
         return {"ok": True, "platform": "bilibili", "engine": "bili-api-direct",
@@ -1080,9 +1119,9 @@ def _download_bilibili(
                 "output": output, "metadata": not no_metadata,
                 "fallback": "bili-api-direct-after-soulseek"}
 
-    # Tier 4: YouTube fallback
-    print(f"\n  Bilibili all tiers failed. Falling back to YouTube...")
-    result = _do_youtube_download(
+    # Tier 4: YouTube Music fallback
+    print(f"\n  Bilibili all tiers failed. Falling back to YouTube Music...")
+    result = _do_ytmusic_download(
         py, query, output, fmt, proxy, bitrate, index, embed_thumbnail,
         no_metadata=no_metadata, cookies=cookies, before_snapshot=before,
     )
@@ -1297,7 +1336,7 @@ def _do_soulseek_download(
         query, output,
         username=slsk_user, password=slsk_pass,
         wait=20, timeout=600,
-        proxy=proxy)
+        proxy=proxy, preferred_fmt=fmt)
 
     if ok and path:
         print(f"\n[OK] Download complete! -> {path}")
@@ -1323,14 +1362,20 @@ def _do_soulseek_download(
         print("  No Soulseek results.")
         return {"ok": False, "platform": "soulseek", "error": "no results"}
 
-    # Divide candidates by format and free-slot status
-    flac_free = [r for r in results if r["extension"] == "flac" and r["has_free_slots"]]
-    flac_all  = [r for r in results if r["extension"] == "flac"]
-    mp3_free  = [r for r in results if r["extension"] in ("mp3",) and r["has_free_slots"]]
-    mp3_all   = [r for r in results if r["extension"] in ("mp3",)]
-    other     = [r for r in results if r["extension"] not in ("flac", "mp3")]
-
-    candidates = (flac_free or flac_all or mp3_free or mp3_all or other)
+    # Divide candidates by format and free-slot status, respecting fmt preference
+    preferred_ext = fmt.lower() if fmt and fmt not in ("auto", "0") else None
+    if preferred_ext:
+        candidates = [r for r in results if r.get("extension") == preferred_ext]
+        if not candidates:
+            # fallback to all results if preferred format not found
+            candidates = results
+    else:
+        flac_free = [r for r in results if r["extension"] == "flac" and r["has_free_slots"]]
+        flac_all  = [r for r in results if r["extension"] == "flac"]
+        mp3_free  = [r for r in results if r["extension"] in ("mp3",) and r["has_free_slots"]]
+        mp3_all   = [r for r in results if r["extension"] in ("mp3",)]
+        other     = [r for r in results if r["extension"] not in ("flac", "mp3")]
+        candidates = (flac_free or flac_all or mp3_free or mp3_all or other)
 
     print(f"  Found {len(results)} files, trying download...")
     if candidates:
@@ -1467,7 +1512,7 @@ def _do_youtube_download(
         py, search_query, output, fmt, bitrate, embed_thumbnail,
         proxy=proxy, index=index, cookies=cookies,
     )
-    if ok:
+    if ok and _verify_output_grew(output, before_snapshot):
         if not no_metadata:
             enhance_metadata(query, "", output, embed_thumbnail=embed_thumbnail, before_snapshot=before_snapshot)
         print(f"\n[OK] Download complete!")
@@ -1485,6 +1530,8 @@ def _do_youtube_download(
             "metadata": not no_metadata,
         }
 
+    if ok:
+        print(f"  [!] yt-dlp exited 0 but no new audio files appeared (search returned 0 items)")
     print(f"\n[FAIL] YouTube download failed.")
     print("\n--- Common YouTube Issues ---")
     if not proxy:
@@ -1550,7 +1597,7 @@ def _download_direct(
         py, url, output, fmt, bitrate, embed_thumbnail,
         proxy=proxy, index=index, cookies=cookies,
     )
-    if ok:
+    if ok and _verify_output_grew(output, before_snapshot):
         if not no_metadata:
             enhance_metadata(url, "", output, embed_thumbnail=embed_thumbnail, before_snapshot=before_snapshot)
         print(f"\n[OK] Download complete!")
@@ -1568,6 +1615,8 @@ def _download_direct(
             "metadata": not no_metadata,
         }
 
+    if ok:
+        print(f"  [!] yt-dlp exited 0 but no new audio files appeared (may have downloaded 0 items)")
     print(f"\n[FAIL] {source} download failed.")
     if is_youtube_url(url) and not proxy:
         print("  → If you're in China, YouTube is blocked. Add: --proxy socks5://HOST:PORT")

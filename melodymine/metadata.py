@@ -452,25 +452,28 @@ def enhance_metadata(search_query, bili_title, output_dir, embed_thumbnail=True,
     print(f"\n[3/3] Enhancing metadata...")
 
     # ── Layer 1: Parse search query ──
-    artist, title = parse_search_query(search_query)
-    if artist and title:
-        print(f"  From search query: artist={artist}, title={title}")
+    parsed_artist, parsed_title = parse_search_query(search_query)
+    if parsed_artist and parsed_title:
+        print(f"  From search query: artist={parsed_artist}, title={parsed_title}")
     elif bili_title:
-        artist, title = parse_bili_title(bili_title)
-        if artist and title:
-            print(f"  From Bilibili title: artist={artist}, title={title}")
-
-    if not artist or not title:
-        print(f"  [!] Could not determine artist/title, keeping original tags")
-        return
+        parsed_artist, parsed_title = parse_bili_title(bili_title)
+        if parsed_artist and parsed_title:
+            print(f"  From Bilibili title: artist={parsed_artist}, title={parsed_title}")
 
     # ── Layer 2: Multi-source lookup (concurrent) ──
+    # Always run the lookup — even if parsing didn't yield both fields the
+    # external sources may still find good results.  Parsed values are only
+    # used as scoring anchors and won't prevent the lookup from running.
+    lookup_query = search_query.strip() or bili_title.strip()
+    if not lookup_query:
+        lookup_query = os.path.splitext(os.path.basename(filepath))[0]
+
     print(f"  Looking up album info (MusicBrainz + NetEase + iTunes in parallel)...")
 
     with ThreadPoolExecutor(max_workers=3) as pool:
-        fut_mb = pool.submit(mbrainz_client.lookup, search_query, 5)
-        fut_ne = pool.submit(netease_client.search, search_query, 10)
-        fut_it = pool.submit(itunes_search, search_query, 10)
+        fut_mb = pool.submit(mbrainz_client.lookup, lookup_query, 5)
+        fut_ne = pool.submit(netease_client.search, lookup_query, 10)
+        fut_it = pool.submit(itunes_search, lookup_query, 10)
         try:
             mb_results = fut_mb.result() or []
         except Exception:
@@ -484,9 +487,14 @@ def enhance_metadata(search_query, bili_title, output_dir, embed_thumbnail=True,
         except Exception:
             it_results = []
 
-    best_mb_score, mb_data = _best_metadata_candidate(mb_results, artist, title)
-    best_ne_score, ne_data = _best_metadata_candidate(ne_results, artist, title, collaboration_aware=True)
-    best_it_score, it_data = _best_metadata_candidate(it_results, artist, title, bonus_fields=True)
+    # Score with whatever parsed info we have (even partial) — at minimum
+    # the title is useful for filtering noise in the results.
+    scoring_artist = parsed_artist or ""
+    scoring_title = parsed_title or lookup_query
+
+    best_mb_score, mb_data = _best_metadata_candidate(mb_results, scoring_artist, scoring_title)
+    best_ne_score, ne_data = _best_metadata_candidate(ne_results, scoring_artist, scoring_title, collaboration_aware=True)
+    best_it_score, it_data = _best_metadata_candidate(it_results, scoring_artist, scoring_title, bonus_fields=True)
 
     if mb_data:
         print(f"    Best: {mb_data['artist']} - {mb_data['title']} [MusicBrainz (score={best_mb_score})]")
@@ -509,9 +517,10 @@ def enhance_metadata(search_query, bili_title, output_dir, embed_thumbnail=True,
     if it_data:
         candidates.append(("iTunes", best_it_score, it_data))
 
-    if not candidates:
-        album, pic_url, source = "", "", "parsed query"
-    else:
+    # ── Decide final artist / title / album — prefer lookup results ──
+    final_artist, final_title, album, pic_url, source = None, None, "", "", ""
+
+    if candidates:
         def sort_key(item):
             src, score, data = item
             has_cover = 1 if (src == "iTunes" and data.get("cover")) or data.get("pic_url") else 0
@@ -519,6 +528,9 @@ def enhance_metadata(search_query, bili_title, output_dir, embed_thumbnail=True,
 
         candidates.sort(key=sort_key, reverse=True)
         source, best_score, best_data = candidates[0]
+
+        final_artist = _clean_artist(best_data.get("artist", "")) or best_data.get("artist", "").strip()
+        final_title = (best_data.get("title") or "").strip()
 
         if source == "MusicBrainz":
             pic_url = best_data.get("pic_url", "")
@@ -529,6 +541,16 @@ def enhance_metadata(search_query, bili_title, output_dir, embed_thumbnail=True,
         else:  # iTunes
             pic_url = best_data.get("cover", "")
             album = best_data.get("album", "").strip()
+
+    # Fall back to parsed values if lookup gave nothing
+    if not final_artist:
+        final_artist = parsed_artist or ""
+    if not final_title:
+        final_title = parsed_title or os.path.splitext(os.path.basename(filepath))[0]
+
+    if not final_artist and not final_title:
+        print(f"  [!] Could not determine artist/title, keeping original tags")
+        return
 
     if album:
         print(f"  Album: {album} (from {source})")
@@ -547,14 +569,20 @@ def enhance_metadata(search_query, bili_title, output_dir, embed_thumbnail=True,
         print(f"  Cover: skipped (--no-thumbnail)")
 
     # ── Set ID3 tags with ffmpeg ──
-    ok = set_metadata(filepath, title=title, artist=artist, album=album, cover_path=cover_path)
+    ok = set_metadata(filepath, title=final_title, artist=final_artist, album=album, cover_path=cover_path)
     if ok:
-        print(f"  [OK] Metadata embedded: {artist} - {title}" + (f" | {album}" if album else ""))
+        print(f"  [OK] Metadata embedded: {final_artist} - {final_title}" + (f" | {album}" if album else ""))
     else:
         print(f"  [!] Failed to set metadata (ffmpeg error)")
 
-    # ── Rename file ──
-    new_base = sanitize_filename(f"{artist} - {title}")
+    # ── Rename file to "Artist - Title.ext" ──
+    if final_artist and final_title:
+        new_base = sanitize_filename(f"{final_artist} - {final_title}")
+    elif final_title:
+        new_base = sanitize_filename(final_title)
+    else:
+        new_base = None
+
     if new_base:
         ext = os.path.splitext(filepath)[1]
         new_path = os.path.join(os.path.dirname(filepath), new_base + ext)

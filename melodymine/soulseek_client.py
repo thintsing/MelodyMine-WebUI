@@ -367,7 +367,7 @@ def download(target_user, remote_path, output_dir, username=None, password=None,
         return False, None
 
 
-def search_and_download(query, output_dir, username=None, password=None, wait=15, timeout=120, proxy=""):
+def search_and_download(query, output_dir, username=None, password=None, wait=15, timeout=120, proxy="", preferred_fmt=None):
     """Search then immediately download the first working result in ONE session."""
     u, p = _get_creds(username, password)
     if not u:
@@ -378,6 +378,7 @@ def search_and_download(query, output_dir, username=None, password=None, wait=15
         print(f"  No proxy configured (VPS is outside China, direct connection).")
 
     os.makedirs(output_dir, exist_ok=True)
+    pref_ext = preferred_fmt.lower() if preferred_fmt and preferred_fmt not in ("auto", "0") else None
 
     async def _run():
         async with _SoulseekSession(u, p, actual_proxy) as sess:
@@ -385,9 +386,14 @@ def search_and_download(query, output_dir, username=None, password=None, wait=15
             results = await sess.search(query, wait)
             print(f"  Search returned {len(results)} results")
 
-            # Pick candidates: prefer FLAC over MP3, prefer smaller files
-            candidates = [r for r in results if r.get("extension") in ("flac", "mp3", "wav", "alac", "ape", "wv")]
-            candidates.sort(key=lambda x: (0 if x["extension"] == "flac" else 1, x["filesize"]))
+            # Pick candidates: respect preferred format, then prefer FLAC > others
+            audio_exts = ("flac", "mp3", "wav", "alac", "ape", "wv", "m4a", "ogg", "opus", "aac")
+            candidates = [r for r in results if r.get("extension") in audio_exts]
+            if pref_ext:
+                # Sort preferred format first, then by filesize
+                candidates.sort(key=lambda x: (0 if x["extension"] == pref_ext else 1, x["filesize"]))
+            else:
+                candidates.sort(key=lambda x: (0 if x["extension"] == "flac" else 1, x["filesize"]))
 
             if not candidates:
                 print("  [!] No audio candidates found")

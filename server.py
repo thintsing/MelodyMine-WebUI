@@ -43,7 +43,7 @@ from melodymine.config_manager import (
     _load_hidden_set, _save_hidden_set,
     _record_lock, get_soulseek_creds,
 )
-from melodymine.progress import ProgressManager
+from melodymine.progress import ProgressManager, DownloadCancelled
 
 # ── Audio extensions recognised by the file list ─────────────────────
 
@@ -71,11 +71,18 @@ pm = ProgressManager()
 
 def _build_download_params(form_data: dict, output: str = "") -> dict:
     """Reduce copy-paste between single and playlist download params."""
+    # Prefer stored config → form value → default
+    out_dir = output or ""
+    if not out_dir:
+        cfg = _load_config()
+        out_dir = cfg.get("output_dir", "") or ""
+    if not out_dir:
+        out_dir = str(DOWNLOADS_DIR)
     return {
         "query": form_data.get("query", "").strip(),
         "platform": form_data.get("platform", "auto"),
         "format": form_data.get("format", "mp3"),
-        "output": output or str(DOWNLOADS_DIR),
+        "output": out_dir,
         "proxy": form_data.get("proxy", ""),
         "bitrate": form_data.get("bitrate", "320k"),
         "index": form_data.get("index", 1),
@@ -115,8 +122,16 @@ def run_download_in_thread(task_id: str, params: dict) -> None:
                 slsk_pass=slsk_pass,
             )
 
+        # Post-download: verify file integrity
+        if isinstance(result, dict) and result.get("ok"):
+            result = music_helper._finalize_download_result(result, params["output"])
+
         pm.set_result(task_id, result)
 
+    except DownloadCancelled:
+        pm.emit(task_id, "status", "cancelled")
+        pm.emit(task_id, "log", "[CANCELLED] Download cancelled by user")
+        pm.set_result(task_id, {"ok": False, "error": "Cancelled by user"})
     except Exception as e:
         import traceback
         pm.emit(task_id, "log", f"[ERROR] {e}")
@@ -274,6 +289,8 @@ def run_playlist_download_in_thread(task_id: str, params: dict) -> None:
                         slsk_user=slsk_user, slsk_pass=slsk_pass,
                         quick=quick,
                     )
+                except DownloadCancelled:
+                    result = {"ok": False, "error": "Cancelled by user"}
                 except Exception as e:
                     result = {"ok": False, "error": str(e)}
 

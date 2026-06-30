@@ -135,7 +135,14 @@ def _search_plain(query, limit, timeout=10):
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             data = json.loads(resp.read().decode("utf-8"))
-    except Exception:
+    except urllib.error.HTTPError as e:
+        print(f"  [!] Plain search HTTP {e.code}: {e.reason}", file=sys.stderr)
+        return []
+    except urllib.error.URLError as e:
+        print(f"  [!] Plain search network error: {e.reason}", file=sys.stderr)
+        return []
+    except Exception as e:
+        print(f"  [!] Plain search unexpected error: {e}", file=sys.stderr)
         return []
 
     # s.search returns {numResults, page, pagesize, results: [...]}

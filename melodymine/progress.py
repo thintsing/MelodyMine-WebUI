@@ -14,6 +14,10 @@ from io import StringIO
 import sys
 
 
+class DownloadCancelled(Exception):
+    """Raised when a download task is cancelled by the user."""
+
+
 class ProgressManager:
     """Thread-safe progress queues + cancel support for active downloads."""
 
@@ -100,11 +104,16 @@ class ProgressManager:
             yield  # another thread is capturing; skip
             return
 
+        pm_ref = self
+        tid = task_id
+
         class _Tee(StringIO):
             def write(self, s):
                 super().write(s)
                 if s.strip():
                     sys.__stdout__.write(s)
+                if pm_ref.is_cancelled(tid):
+                    raise DownloadCancelled()
 
             def flush(self):
                 super().flush()
@@ -115,6 +124,9 @@ class ProgressManager:
         sys.stdout = tee
         try:
             yield
+        except DownloadCancelled:
+            pass  # cancelled — don't emit progress, just clean up
+        else:
             # emit captured output as a single log block
             captured = tee.getvalue()
             if captured.strip():
