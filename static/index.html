@@ -1,0 +1,1926 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MelodyMine — Music Downloader</title>
+<style>
+/* ═══════════════════════════════════════════════════════════════════════════
+   MelodyMine Web UI — Design System v2
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+:root {
+  --bg-deep: #09090f;
+  --bg: #0f0f1a;
+  --surface: rgba(22, 22, 40, 0.7);
+  --surface-solid: #1a1a30;
+  --border: rgba(255, 255, 255, 0.06);
+  --border-hover: rgba(255, 255, 255, 0.14);
+  --text: #e8e8f0;
+  --text-dim: #9090a8;
+  --text-muted: #606078;
+  --accent: #8b5cf6;
+  --accent-glow: rgba(139, 92, 246, 0.35);
+  --accent2: #a78bfa;
+  --pink: #ec4899;
+  --pink-glow: rgba(236, 72, 153, 0.3);
+  --cyan: #22d3ee;
+  --green: #34d399;
+  --green-glow: rgba(52, 211, 153, 0.25);
+  --red: #f87171;
+  --red-glow: rgba(248, 113, 113, 0.25);
+  --yellow: #fbbf24;
+  --radius-sm: 8px;
+  --radius: 14px;
+  --radius-lg: 20px;
+  --font: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+  --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.4);
+  --transition: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: var(--font);
+  background: var(--bg-deep);
+  color: var(--text);
+  min-height: 100vh;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Animated Background
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.bg-glow {
+  position: fixed;
+  border-radius: 50%;
+  filter: blur(120px);
+  opacity: 0.12;
+  z-index: 0;
+  pointer-events: none;
+}
+.bg-glow.g1 {
+  width: 600px; height: 600px;
+  background: var(--accent);
+  top: -200px; left: -100px;
+  animation: float1 20s ease-in-out infinite;
+}
+.bg-glow.g2 {
+  width: 500px; height: 500px;
+  background: var(--pink);
+  bottom: -150px; right: -100px;
+  animation: float2 25s ease-in-out infinite;
+}
+.bg-glow.g3 {
+  width: 400px; height: 400px;
+  background: var(--cyan);
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  animation: float3 18s ease-in-out infinite;
+}
+
+@keyframes float1 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33% { transform: translate(80px, 60px) scale(1.15); }
+  66% { transform: translate(-40px, -30px) scale(0.9); }
+}
+@keyframes float2 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33% { transform: translate(-60px, -80px) scale(1.1); }
+  66% { transform: translate(50px, 40px) scale(0.85); }
+}
+@keyframes float3 {
+  0%, 100% { transform: translate(-50%, -50%) scale(1); }
+  50% { transform: translate(-50%, -50%) scale(1.3); }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Layout
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+#app {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 40px 24px 60px;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Header
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.header {
+  text-align: center;
+  margin-bottom: 40px;
+  position: relative;
+}
+
+.logo-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px; height: 64px;
+  border-radius: 18px;
+  background: linear-gradient(135deg, var(--accent), var(--pink));
+  margin-bottom: 16px;
+  box-shadow: 0 8px 32px rgba(139, 92, 246, 0.3);
+  position: relative;
+  animation: logoPulse 3s ease-in-out infinite;
+}
+
+.logo-icon svg {
+  width: 32px; height: 32px;
+  fill: none; stroke: #fff;
+  stroke-width: 2;
+}
+
+@keyframes logoPulse {
+  0%, 100% { box-shadow: 0 8px 32px rgba(139, 92, 246, 0.3); }
+  50% { box-shadow: 0 8px 48px rgba(236, 72, 153, 0.45); }
+}
+
+.header h1 {
+  font-size: 2.2rem;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+  background: linear-gradient(135deg, var(--accent2) 0%, #c4b5fd 40%, var(--pink) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.header .subtitle {
+  color: var(--text-dim);
+  font-size: 0.9rem;
+  font-weight: 400;
+  margin-top: 6px;
+  letter-spacing: 0.3px;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Status Pills
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.status-pills {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-bottom: 32px;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 0.76rem;
+  font-weight: 500;
+  color: var(--text-dim);
+  background: var(--surface);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  transition: all var(--transition);
+}
+
+.pill .dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  display: inline-block;
+  position: relative;
+}
+
+.pill .dot.ok {
+  background: var(--green);
+  box-shadow: 0 0 8px var(--green-glow);
+}
+.pill .dot.fail {
+  background: var(--red);
+  box-shadow: 0 0 8px var(--red-glow);
+}
+.pill .dot.pending {
+  background: var(--yellow);
+  box-shadow: 0 0 8px rgba(251, 191, 36, 0.3);
+  animation: pulse-dot 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Skeleton Loading
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.skeleton {
+  background: linear-gradient(90deg, rgba(255,255,255,0.03) 25%, rgba(255,255,255,0.06) 50%, rgba(255,255,255,0.03) 75%);
+  background-size: 200% 100%;
+  animation: skeletonShimmer 1.5s ease-in-out infinite;
+  border-radius: 8px;
+}
+
+@keyframes skeletonShimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.skeleton-pill { width: 80px; height: 28px; display: inline-block; margin-right: 8px; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Glass Card
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.card {
+  background: var(--surface);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+  margin-bottom: 16px;
+  transition: border-color var(--transition), box-shadow var(--transition);
+}
+
+.card:hover {
+  border-color: var(--border-hover);
+  box-shadow: var(--shadow-lg);
+}
+
+.card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 18px;
+}
+
+.card-header h2 {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.card-header h2 .icon-circle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px; height: 32px;
+  border-radius: 10px;
+  font-size: 0.85rem;
+}
+
+.card-header h2 .icon-circle.search-icon { background: rgba(139, 92, 246, 0.15); }
+.card-header h2 .icon-circle.progress-icon { background: rgba(34, 211, 238, 0.12); }
+.card-header h2 .icon-circle.files-icon { background: rgba(52, 211, 153, 0.12); }
+.card-header h2 .icon-circle.settings-icon { background: rgba(251, 191, 36, 0.12); }
+
+/* Stats badge */
+.stats-badge {
+  font-size: 0.7rem;
+  font-weight: 500;
+  color: var(--text-dim);
+  background: rgba(255, 255, 255, 0.03);
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Search Bar
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.search-group {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.search-wrapper {
+  flex: 1;
+  position: relative;
+}
+
+.search-wrapper .search-icon-inner {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-muted);
+  font-size: 1rem;
+  pointer-events: none;
+  transition: color var(--transition);
+  z-index: 1;
+}
+
+.search-input {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 13px 14px 13px 42px;
+  color: var(--text);
+  font-size: 0.92rem;
+  font-family: var(--font);
+  outline: none;
+  transition: all var(--transition);
+}
+
+.search-input::placeholder { color: var(--text-muted); }
+.search-input:focus {
+  border-color: var(--accent);
+  background: rgba(139, 92, 246, 0.04);
+  box-shadow: 0 0 0 3px var(--accent-glow);
+}
+
+/* Focus-within: glow the icon too */
+.search-wrapper:focus-within .search-icon-inner { color: var(--accent2); }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Options Row
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.options-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.select-sm {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 9px 32px 9px 12px;
+  color: var(--text);
+  font-size: 0.82rem;
+  font-family: var(--font);
+  outline: none;
+  cursor: pointer;
+  transition: all var(--transition);
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239090a8' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+}
+
+.select-sm:hover { border-color: var(--border-hover); }
+.select-sm:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-glow);
+}
+
+.checkbox-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 0.84rem;
+  font-weight: 500;
+  color: var(--text-dim);
+  cursor: pointer;
+  user-select: none;
+  padding: 10px 18px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.02);
+  transition: all var(--transition);
+  min-height: 42px;
+  white-space: nowrap;
+}
+
+.checkbox-pill:hover {
+  border-color: var(--accent);
+  background: rgba(139, 92, 246, 0.05);
+  color: var(--text);
+}
+
+.checkbox-pill.checked {
+  border-color: var(--accent);
+  background: rgba(139, 92, 246, 0.12);
+  color: var(--accent2);
+  box-shadow: 0 0 0 2px var(--accent-glow);
+}
+
+.checkbox-pill span { pointer-events: none; }
+
+.checkbox-pill input[type="checkbox"] {
+  accent-color: var(--accent);
+  width: 17px;
+  height: 17px;
+  cursor: pointer;
+  margin: 0;
+  flex-shrink: 0;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Buttons
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 22px;
+  border: none;
+  border-radius: var(--radius);
+  font-size: 0.88rem;
+  font-weight: 600;
+  font-family: var(--font);
+  cursor: pointer;
+  transition: all var(--transition);
+  white-space: nowrap;
+  text-decoration: none;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, var(--accent), #7c3aed);
+  color: #fff;
+  box-shadow: 0 4px 20px var(--accent-glow);
+  position: relative;
+  overflow: hidden;
+}
+
+.btn-primary::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, transparent 40%, rgba(255,255,255,0.1) 50%, transparent 60%);
+  transform: translateX(-100%);
+  transition: transform 0.6s;
+}
+
+.btn-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 28px rgba(139, 92, 246, 0.45);
+}
+
+.btn-primary:hover::after { transform: translateX(100%); }
+.btn-primary:active { transform: translateY(0) scale(0.98); }
+
+.btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+.btn-primary:disabled::after { display: none; }
+
+.btn-sm {
+  padding: 6px 14px;
+  font-size: 0.76rem;
+  font-weight: 500;
+  border-radius: 8px;
+}
+
+.btn-ghost {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+}
+
+.btn-ghost:hover {
+  border-color: var(--accent);
+  color: var(--text);
+  background: rgba(139, 92, 246, 0.06);
+}
+
+.btn-danger {
+  background: transparent;
+  border: 1px solid rgba(248, 113, 113, 0.3);
+  color: var(--red);
+}
+
+.btn-danger:hover {
+  background: rgba(248, 113, 113, 0.1);
+  border-color: var(--red);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Progress Items
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.progress-area { min-height: 40px; }
+
+.progress-item {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px;
+  margin-bottom: 10px;
+  animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.progress-item.cancelling {
+  opacity: 0.5;
+  border-color: rgba(248, 113, 113, 0.2);
+}
+
+.progress-item .task-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.progress-item .task-query {
+  font-weight: 600;
+  font-size: 0.88rem;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.progress-item .task-query .spinner {
+  width: 16px; height: 16px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+.progress-item .task-query .done-icon { color: var(--green); font-size: 1rem; }
+.progress-item .task-query .error-icon { color: var(--red); font-size: 1rem; }
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Progress Bar */
+.progress-bar-outer {
+  height: 5px;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 3px;
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+
+.progress-bar-inner {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  width: 0%;
+  position: relative;
+}
+
+.progress-bar-inner.active {
+  background: linear-gradient(90deg, var(--accent), var(--pink), var(--accent));
+  background-size: 200% 100%;
+  animation: shimmer 2s linear infinite;
+}
+
+.progress-bar-inner.done {
+  background: var(--green);
+  box-shadow: 0 0 12px var(--green-glow);
+}
+
+.progress-bar-inner.error {
+  background: var(--red);
+  box-shadow: 0 0 12px var(--red-glow);
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* Logs */
+.task-logs {
+  max-height: 140px;
+  overflow-y: auto;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  line-height: 1.6;
+  background: rgba(0, 0, 0, 0.25);
+  border-radius: 8px;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.03);
+}
+
+.task-logs::-webkit-scrollbar { width: 4px; }
+.task-logs::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 2px;
+}
+
+.task-log-line { padding: 0 2px; }
+.task-log-line.highlight { color: var(--accent2); }
+.task-log-line.warn { color: var(--yellow); }
+.task-log-line.error { color: var(--red); }
+
+/* Status footer */
+.task-status-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  font-size: 0.78rem;
+}
+.task-status-footer.success { color: var(--green); }
+.task-status-footer.error { color: var(--red); }
+.task-status-footer.pending { color: var(--text-dim); }
+.task-status-footer.cancelling { color: var(--red); }
+
+/* Cancelling overlay */
+.cancelling-overlay {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.78rem;
+  color: var(--red);
+  margin-top: 8px;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Music Bars Animation
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.music-bars {
+  display: inline-flex;
+  gap: 2px;
+  align-items: flex-end;
+  height: 16px;
+  margin-left: auto;
+}
+
+.music-bars .bar {
+  width: 3px;
+  background: var(--accent);
+  border-radius: 2px;
+  animation: barJump 0.6s ease-in-out infinite;
+}
+
+.music-bars .bar:nth-child(1) { height: 8px; animation-delay: 0s; }
+.music-bars .bar:nth-child(2) { height: 13px; animation-delay: 0.1s; }
+.music-bars .bar:nth-child(3) { height: 6px; animation-delay: 0.2s; }
+.music-bars .bar:nth-child(4) { height: 15px; animation-delay: 0.3s; }
+.music-bars .bar:nth-child(5) { height: 10px; animation-delay: 0.4s; }
+
+@keyframes barJump {
+  0%, 100% { transform: scaleY(0.4); }
+  50% { transform: scaleY(1); }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   File List
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.file-list {
+  max-height: 380px;
+  overflow-y: auto;
+}
+
+.file-list::-webkit-scrollbar { width: 4px; }
+.file-list::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 2px;
+}
+
+.file-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  transition: background var(--transition), opacity 0.3s ease;
+  border: 1px solid transparent;
+}
+
+.file-item:hover {
+  background: rgba(255, 255, 255, 0.02);
+  border-color: var(--border);
+}
+
+.file-item + .file-item { margin-top: 2px; }
+
+.file-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px; height: 38px;
+  border-radius: 10px;
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+
+.file-icon.mp3 { background: rgba(139, 92, 246, 0.15); }
+.file-icon.flac { background: rgba(52, 211, 153, 0.12); }
+.file-icon.m4a { background: rgba(34, 211, 238, 0.12); }
+.file-icon.default { background: rgba(255, 255, 255, 0.04); }
+
+.file-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.file-name {
+  font-size: 0.86rem;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+}
+
+.file-meta {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  margin-top: 2px;
+  display: flex;
+  gap: 10px;
+}
+
+.file-del {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 1rem;
+  transition: all var(--transition);
+  flex-shrink: 0;
+}
+
+.file-del:hover {
+  border-color: rgba(248, 113, 113, 0.3);
+  background: rgba(248, 113, 113, 0.08);
+  color: var(--red);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Settings
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.setting-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.setting-row:last-child { border-bottom: none; padding-bottom: 0; }
+.setting-row:first-child { padding-top: 0; }
+
+.setting-label {
+  font-size: 0.84rem;
+  color: var(--text-dim);
+  min-width: 140px;
+  font-weight: 500;
+}
+
+.setting-input {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 14px;
+  color: var(--text);
+  font-size: 0.84rem;
+  font-family: var(--font-mono);
+  outline: none;
+  transition: all var(--transition);
+}
+
+.setting-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-glow);
+}
+
+.setting-input::placeholder { color: var(--text-muted); }
+
+.setting-hint {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  margin-top: 4px;
+  font-family: var(--font);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Empty States
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.empty-state {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--text-muted);
+}
+
+.empty-state .empty-icon {
+  font-size: 2.5rem;
+  margin-bottom: 12px;
+  opacity: 0.5;
+}
+
+.empty-state p {
+  font-size: 0.86rem;
+  line-height: 1.5;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Toast
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.toast {
+  position: fixed;
+  top: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--surface-solid);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 24px;
+  font-size: 0.84rem;
+  font-weight: 500;
+  color: var(--text);
+  z-index: 1000;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  animation: toastIn 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.toast.error { border-color: rgba(248, 113, 113, 0.3); }
+.toast.success { border-color: rgba(52, 211, 153, 0.3); }
+
+@keyframes toastIn {
+  from { opacity: 0; transform: translateX(-50%) translateY(-12px) scale(0.95); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Responsive
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+@media (max-width: 640px) {
+  #app { padding: 24px 16px 40px; }
+  .header h1 { font-size: 1.7rem; }
+  .logo-icon { width: 48px; height: 48px; border-radius: 14px; }
+  .logo-icon svg { width: 24px; height: 24px; }
+
+  .search-group { flex-direction: column; }
+  .search-group .btn-primary { width: 100%; }
+
+  .options-row { flex-direction: column; }
+  .options-row select, .options-row .checkbox-pill { width: 100%; }
+
+  .setting-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  .setting-label { min-width: 0; }
+  .setting-input { width: 100%; }
+
+  .file-item { flex-wrap: wrap; gap: 8px; }
+  .card { padding: 16px; }
+
+  .bg-glow.g1 { width: 300px; height: 300px; }
+  .bg-glow.g2 { width: 250px; height: 250px; }
+  .bg-glow.g3 { width: 200px; height: 200px; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Footer
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.footer {
+  text-align: center;
+  padding: 24px 0 0;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  opacity: 0.6;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Playlist
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.playlist-banner {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 18px;
+  background: rgba(139, 92, 246, 0.06);
+  border: 1px solid rgba(139, 92, 246, 0.15);
+  border-radius: var(--radius);
+  margin-bottom: 14px;
+}
+
+.playlist-banner .pl-icon {
+  font-size: 1.8rem;
+  flex-shrink: 0;
+}
+
+.playlist-banner .pl-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.playlist-banner .pl-title {
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.playlist-banner .pl-meta {
+  font-size: 0.76rem;
+  color: var(--text-dim);
+  margin-top: 2px;
+}
+
+.playlist-track-list {
+  max-height: 420px;
+  overflow-y: auto;
+  margin-bottom: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: rgba(0,0,0,0.12);
+}
+
+.playlist-track-list::-webkit-scrollbar { width: 4px; }
+.playlist-track-list::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.06);
+  border-radius: 2px;
+}
+
+.pl-track {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-bottom: 1px solid rgba(255,255,255,0.03);
+  transition: background var(--transition);
+}
+
+.pl-track:last-child { border-bottom: none; }
+.pl-track:hover { background: rgba(255,255,255,0.01); }
+
+.pl-track .pl-num {
+  width: 28px;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  text-align: right;
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+}
+
+.pl-track .pl-status {
+  width: 20px;
+  text-align: center;
+  flex-shrink: 0;
+  font-size: 0.8rem;
+}
+
+.pl-track .pl-status.pending { color: var(--text-muted); }
+.pl-track .pl-status.ok { color: var(--green); }
+.pl-track .pl-status.fail { color: var(--red); }
+.pl-track .pl-status.downloading { color: var(--accent); }
+
+.pl-track .pl-title {
+  flex: 1;
+  font-size: 0.84rem;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pl-track .pl-artist {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.pl-track.done { opacity: 0.6; }
+.pl-track.failed { opacity: 0.5; color: var(--red); }
+
+.pl-stats {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+  font-size: 0.82rem;
+}
+
+.pl-stats .pl-count {
+  color: var(--text-dim);
+  font-weight: 500;
+}
+
+.pl-stats .pl-summary {
+  color: var(--green);
+  font-weight: 600;
+}
+
+/* Playlist detection hint */
+.pl-hint {
+  font-size: 0.72rem;
+  color: var(--accent2);
+  margin-top: 6px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-left: 4px;
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+</style>
+</head>
+<body>
+
+<!-- Animated Background -->
+<div class="bg-glow g1"></div>
+<div class="bg-glow g2"></div>
+<div class="bg-glow g3"></div>
+
+<div id="app">
+  <!-- ═══════════ Header ═══════════ -->
+  <div class="header">
+    <div class="logo-icon">
+      <svg viewBox="0 0 24 24">
+        <path d="M9 18V5l12-2v13"/>
+        <circle cx="6" cy="18" r="3"/>
+        <circle cx="18" cy="16" r="3"/>
+      </svg>
+    </div>
+    <h1>MelodyMine</h1>
+    <p class="subtitle">Free music downloader — Bilibili · YouTube · Soulseek · NetEase</p>
+  </div>
+
+  <!-- ═══════════ Status Pills ═══════════ -->
+  <div id="statusBar" class="status-pills">
+    <span class="skeleton skeleton-pill"></span>
+    <span class="skeleton skeleton-pill"></span>
+    <span class="skeleton skeleton-pill"></span>
+    <span class="skeleton skeleton-pill"></span>
+  </div>
+
+  <!-- ═══════════ Search ═══════════ -->
+  <div class="card">
+    <div class="card-header">
+      <h2><span class="icon-circle search-icon">🎵</span>Search &amp; Download</h2>
+    </div>
+    <div class="search-group">
+      <div class="search-wrapper">
+        <span class="search-icon-inner">🔍</span>
+        <input type="text" class="search-input" id="searchInput"
+               placeholder="Song name, artist, or playlist URL — e.g. 周杰伦 晴天 / paste playlist link"
+               autofocus
+               oninput="onSearchInput()"
+               onkeydown="if(event.key==='Enter')handleSearchKey(event)">
+      </div>
+      <button class="btn btn-primary" id="dlBtn" onclick="handleMainAction()">
+        <span id="dlBtnText">Download</span>
+        <span id="dlBtnSpinner" style="display:none;width:16px;height:16px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite"></span>
+      </button>
+    </div>
+    <div id="plHint" class="pl-hint" style="display:none"></div>
+    <!-- Playlist area (hidden until playlist resolved) -->
+    <div id="playlistArea" style="display:none">
+      <div class="playlist-banner" id="playlistBanner"></div>
+      <div class="pl-stats">
+        <span class="pl-count" id="plTrackCount"></span>
+        <span class="pl-summary" id="plSummary" style="display:none"></span>
+      </div>
+      <div class="playlist-track-list" id="playlistTrackList"></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-primary btn-sm" id="plDlAllBtn" onclick="downloadPlaylistAll()">Download All</button>
+        <button class="btn btn-ghost btn-sm" id="plClearBtn" onclick="clearPlaylist()">Clear Playlist</button>
+        <label class="checkbox-pill" style="font-size:0.76rem;padding:5px 10px">
+          <input type="checkbox" id="plQuick" checked onchange="updatePlQuickPill()">
+          <span style="font-size:0.76rem">Skip P2P</span>
+        </label>
+      </div>
+    </div>
+    <div class="options-row" style="margin-top:10px">
+      <select class="select-sm" id="platform">
+        <option value="">Auto (smart detect)</option>
+        <option value="bilibili">Bilibili</option>
+        <option value="youtube">YouTube</option>
+        <option value="soulseek">Soulseek P2P</option>
+      </select>
+      <select class="select-sm" id="format">
+        <option value="mp3">MP3</option>
+        <option value="flac">FLAC</option>
+        <option value="m4a">M4A</option>
+        <option value="opus">Opus</option>
+        <option value="auto">Auto (best)</option>
+      </select>
+      <select class="select-sm" id="bitrate">
+        <option value="320k">320k</option>
+        <option value="256k">256k</option>
+        <option value="192k">192k</option>
+        <option value="128k">128k</option>
+        <option value="0">Best available</option>
+      </select>
+      <label class="checkbox-pill" id="quickPill">
+        <input type="checkbox" id="quick" onchange="updateQuickPill()">
+        <span>Skip P2P</span>
+      </label>
+    </div>
+  </div>
+
+  <!-- ═══════════ Progress ═══════════ -->
+  <div class="card" id="progressCard">
+    <div class="card-header">
+      <h2><span class="icon-circle progress-icon">📡</span>Download Progress</h2>
+    </div>
+    <div class="progress-area" id="progressArea">
+      <div class="empty-state">
+        <div class="empty-icon">🎶</div>
+        <p>No active downloads<br><span style="font-size:0.78rem;color:var(--text-muted)">Search for a song above to get started</span></p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════ Downloads ═══════════ -->
+  <div class="card">
+    <div class="card-header">
+      <h2><span class="icon-circle files-icon">📁</span>Downloads <span class="stats-badge" id="filesStat" style="display:none"></span></h2>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-sm btn-primary" onclick="openFolder()">📂 Open Folder</button>
+        <button class="btn btn-sm btn-ghost" onclick="refreshFiles()">🔄 Refresh</button>
+        <button class="btn btn-sm btn-danger" id="clearAllBtn" style="display:none" onclick="clearAllRecords()">🗑 Clear</button>
+      </div>
+    </div>
+    <div class="file-list" id="fileList">
+      <div class="empty-state">
+        <div class="empty-icon">📂</div>
+        <p>Loading your music library...</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════ Settings ═══════════ -->
+  <div class="card" id="settingsCard">
+    <div class="card-header">
+      <h2><span class="icon-circle settings-icon">⚙️</span>Settings</h2>
+    </div>
+    <div id="settingsPanel">
+      <div class="setting-row">
+        <span class="setting-label">📂 Output Directory</span>
+        <div style="flex:1">
+          <input type="text" class="setting-input" id="outDir" placeholder="~/Downloads/MelodyMine">
+          <div class="setting-hint" id="outDirHint" style="display:none"></div>
+        </div>
+      </div>
+      <div class="setting-row">
+        <span class="setting-label">🌐 Proxy URL</span>
+        <div style="flex:1">
+          <input type="text" class="setting-input" id="proxyUrl" placeholder="socks5://127.0.0.1:7897">
+          <div class="setting-hint" id="proxyHint" style="display:none"></div>
+        </div>
+      </div>
+      <div class="setting-row">
+        <span class="setting-label">🔗 Soulseek User</span>
+        <div style="flex:1">
+          <input type="text" class="setting-input" id="slskUser" placeholder="Your Soulseek username">
+          <div class="setting-hint" id="slskHint" style="display:none"></div>
+        </div>
+      </div>
+      <div class="setting-row">
+        <span class="setting-label">🔑 Soulseek Password</span>
+        <div style="flex:1">
+          <input type="password" class="setting-input" id="slskPass" placeholder="Your Soulseek password" autocomplete="off">
+          <div class="setting-hint" id="slskPassHint" style="display:none"></div>
+        </div>
+      </div>
+      <div style="margin-top:14px;text-align:right">
+        <span id="configSaved" style="display:none;color:var(--green);font-size:0.78rem;margin-right:12px;opacity:0;transition:opacity 0.3s">✓ Saved</span>
+        <button class="btn btn-sm btn-primary" id="saveConfigBtn" onclick="saveConfig()">💾 Save Settings</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">MelodyMine — Open Source Music Downloader</div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════════════
+// State
+// ═══════════════════════════════════════════════════════════════════════════
+const STATE = {
+  activeTasks: {},
+  files: [],
+  health: null,
+  loaded: false,
+  // Playlist state
+  playlist: null,         // {platform, title, creator, track_count, tracks: [{query, title, artist, status, file}]}
+  playlistTaskId: null,   // active playlist download task ID
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Init
+// ═══════════════════════════════════════════════════════════════════════════
+async function init() {
+  await Promise.all([checkHealth(), refreshFiles(), loadConfig()]);
+  STATE.loaded = true;
+  if (!Object.keys(STATE.activeTasks).length) renderProgress();
+}
+
+async function checkHealth() {
+  try {
+    const r = await fetch('/api/health');
+    const d = await r.json();
+    STATE.health = d.status || {};
+  } catch (e) {
+    STATE.health = {};
+  }
+  renderStatus();
+}
+
+function renderStatus() {
+  const h = STATE.health || {};
+  const items = [
+    { label: 'FFmpeg', ok: h.ffmpeg },
+    { label: 'yt-dlp', ok: h.yt_dlp },
+    { label: 'Python', ok: !!h.python },
+    { label: h.os || 'System', ok: true },
+  ];
+  document.getElementById('statusBar').innerHTML = items.map(i =>
+    `<div class="pill">
+      <span class="dot ${i.ok ? 'ok' : 'fail'}"></span> ${i.label}
+    </div>`
+  ).join('');
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Playlist Detection (regex mirror backend)
+// ═══════════════════════════════════════════════════════════════════════════
+function isPlaylistUrl(q) {
+  q = q.trim();
+  // YouTube playlist
+  if (/youtube\.com\/playlist\?list=[\w\-]+/i.test(q)) return true;
+  // NetEase playlist/album
+  if (/music\.163\.com\/playlist\?id=\d+/i.test(q)) return true;
+  if (/music\.163\.com\/album\?id=\d+/i.test(q)) return true;
+  // Spotify playlist/album
+  if (/open\.spotify\.com\/(playlist|album)\//i.test(q)) return true;
+  return false;
+}
+
+function onSearchInput() {
+  const q = document.getElementById('searchInput').value.trim();
+  const hint = document.getElementById('plHint');
+  const label = document.getElementById('dlBtnText');
+
+  if (isPlaylistUrl(q)) {
+    hint.style.display = 'flex';
+    hint.textContent = '🎵 Playlist URL detected — click Resolve to view tracks';
+    label.textContent = 'Resolve';
+  } else {
+    hint.style.display = 'none';
+    label.textContent = 'Download';
+  }
+}
+
+async function handleSearchKey(e) {
+  if (e.key !== 'Enter') return;
+  const q = document.getElementById('searchInput').value.trim();
+  if (!q) return;
+  if (isPlaylistUrl(q)) { await handlePlaylistUrl(q); }
+  else { await startDownload(); }
+}
+
+async function handleMainAction() {
+  const q = document.getElementById('searchInput').value.trim();
+  if (!q) return toast('Please enter a search query', 'error');
+  if (isPlaylistUrl(q)) { await handlePlaylistUrl(q); }
+  else { await startDownload(); }
+}
+
+async function handlePlaylistUrl(url) {
+  const btn = document.getElementById('dlBtn');
+  const text = document.getElementById('dlBtnText');
+  const spinner = document.getElementById('dlBtnSpinner');
+  btn.disabled = true;
+  text.textContent = 'Resolving...';
+  spinner.style.display = '';
+
+  try {
+    const body = new URLSearchParams({ url });
+    const r = await fetch('/api/playlist/info', { method: 'POST', body });
+    const d = await r.json();
+    if (!d.ok) return toast('Failed: ' + (d.error || 'Could not resolve playlist'), 'error');
+
+    const pl = d.playlist;
+    pl.tracks.forEach((t, i) => { t._idx = i + 1; t._status = 'pending'; t._file = ''; });
+    STATE.playlist = pl;
+    document.getElementById('searchInput').value = '';
+    renderPlaylist();
+    toast('Resolved: ' + pl.title + ' (' + (pl.track_count || pl.tracks.length) + ' tracks)', 'success');
+  } catch (e) {
+    toast('Connection failed: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false;
+    text.textContent = 'Resolve';
+    spinner.style.display = 'none';
+    onSearchInput();
+    document.getElementById('searchInput').focus();
+  }
+}
+
+function clearPlaylist() {
+  STATE.playlist = null;
+  STATE.playlistTaskId = null;
+  document.getElementById('playlistArea').style.display = 'none';
+  document.getElementById('searchInput').focus();
+}
+
+function renderPlaylist() {
+  const pl = STATE.playlist;
+  if (!pl) return;
+  document.getElementById('playlistArea').style.display = '';
+
+  const icon = pl.type === 'album' ? '💿' : '🎵';
+  document.getElementById('playlistBanner').innerHTML =
+    '<div class="pl-icon">' + icon + '</div>' +
+    '<div class="pl-info">' +
+    '<div class="pl-title">' + escapeHtml(pl.title || 'Playlist') + '</div>' +
+    '<div class="pl-meta">' + (pl.platform || '') + ' ' + (pl.type || 'playlist') + (pl.creator ? ' · ' + escapeHtml(pl.creator) : '') + '</div>' +
+    '</div>';
+
+  const tracks = pl.tracks || [];
+  document.getElementById('plTrackCount').textContent = tracks.length + ' tracks';
+  updatePlSummary();
+
+  document.getElementById('playlistTrackList').innerHTML = tracks.map(function(t) {
+    var icons = { pending: '○', downloading: '◉', ok: '✓', fail: '✗' };
+    var cls = t._status || 'pending';
+    return '<div class="pl-track ' + (t._status === 'ok' ? 'done' : t._status === 'fail' ? 'failed' : '') + '" data-idx="' + t._idx + '">' +
+      '<span class="pl-num">' + t._idx + '</span>' +
+      '<span class="pl-status ' + cls + '">' + (icons[cls] || '○') + '</span>' +
+      '<span class="pl-title">' + escapeHtml(t.title || t.query || '') + '</span>' +
+      '<span class="pl-artist">' + escapeHtml(t.artist || '') + '</span>' +
+      '</div>';
+  }).join('');
+}
+
+function updatePlSummary() {
+  var pl = STATE.playlist, tracks = (pl && pl.tracks) ? pl.tracks : [];
+  var ok = tracks.filter(function(t) { return t._status === 'ok'; }).length;
+  var fail = tracks.filter(function(t) { return t._status === 'fail'; }).length;
+  var el = document.getElementById('plSummary');
+  if (ok + fail > 0) {
+    el.style.display = '';
+    el.textContent = '✓ ' + ok + ' · ✗ ' + fail;
+  } else {
+    el.style.display = 'none';
+  }
+}
+
+function updateTrackStatus(idx, status, file) {
+  var pl = STATE.playlist;
+  if (!pl) return;
+  var t = (pl.tracks || []).find(function(tr) { return tr._idx === idx; });
+  if (t) { t._status = status; if (file) t._file = file; }
+  var row = document.querySelector('.pl-track[data-idx="' + idx + '"]');
+  if (row) {
+    var icons = { pending: '○', downloading: '◉', ok: '✓', fail: '✗' };
+    var statusEl = row.querySelector('.pl-status');
+    statusEl.textContent = icons[status] || '○';
+    statusEl.className = 'pl-status ' + status;
+    row.className = 'pl-track ' + (status === 'ok' ? 'done' : status === 'fail' ? 'failed' : '');
+  }
+  updatePlSummary();
+}
+
+async function downloadPlaylistAll() {
+  var pl = STATE.playlist;
+  if (!pl) return;
+
+  (pl.tracks || []).forEach(function(t) { t._status = 'pending'; t._file = ''; });
+  renderPlaylist();
+
+  var body = new URLSearchParams({
+    url: pl.url || pl.id || '',
+    fmt: document.getElementById('format').value,
+    bitrate: document.getElementById('bitrate').value,
+    quick: document.getElementById('plQuick').checked ? '1' : '0',
+    embed_thumbnail: '1',
+    no_metadata: '0',
+  });
+  var outDir = document.getElementById('outDir').value.trim();
+  if (outDir) body.append('output', outDir);
+  var proxy = document.getElementById('proxyUrl').value.trim();
+  if (proxy) body.append('proxy', proxy);
+
+  try {
+    var r = await fetch('/api/playlist/download', { method: 'POST', body: body });
+    var d = await r.json();
+    if (!d.ok) return toast('Failed: ' + (d.error || ''), 'error');
+
+    var taskId = d.task_id;
+    STATE.playlistTaskId = taskId;
+    STATE.activeTasks[taskId] = { query: pl.title || 'Playlist', logs: [], status: 'resolving', progress: 0, isPlaylist: true };
+    renderProgress();
+    connectWebSocket(taskId);
+  } catch (e) {
+    toast('Connection failed: ' + e.message, 'error');
+  }
+}
+
+function updatePlQuickPill() {}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Download (single)
+// ═══════════════════════════════════════════════════════════════════════════
+async function startDownload() {
+  const query = document.getElementById('searchInput').value.trim();
+  if (!query) return toast('Please enter a search query', 'error');
+
+  setDownloading(true);
+
+  var body = new URLSearchParams({
+    query,
+    fmt: document.getElementById('format').value,
+    bitrate: document.getElementById('bitrate').value,
+    platform: document.getElementById('platform').value,
+    quick: document.getElementById('quick').checked ? '1' : '0',
+    index: '0',
+    embed_thumbnail: '1',
+    no_metadata: '0',
+  });
+
+  var outDir = document.getElementById('outDir').value.trim();
+  if (outDir) body.append('output', outDir);
+  var proxy = document.getElementById('proxyUrl').value.trim();
+  if (proxy) body.append('proxy', proxy);
+
+  try {
+    var r = await fetch('/api/download', { method: 'POST', body: body });
+    var d = await r.json();
+    if (!d.ok) {
+      setDownloading(false);
+      return toast('Failed: ' + (d.error || 'unknown error'), 'error');
+    }
+
+    var taskId = d.task_id;
+    STATE.activeTasks[taskId] = { query, logs: [], status: 'downloading', progress: 0 };
+    renderProgress();
+    connectWebSocket(taskId);
+
+    document.getElementById('searchInput').value = '';
+    document.getElementById('searchInput').focus();
+  } catch (e) {
+    toast('Connection failed: ' + e.message, 'error');
+    setDownloading(false);
+  }
+}
+
+function setDownloading(active) {
+  const btn = document.getElementById('dlBtn');
+  const text = document.getElementById('dlBtnText');
+  const spinner = document.getElementById('dlBtnSpinner');
+  btn.disabled = active;
+  text.style.display = active ? 'none' : '';
+  spinner.style.display = active ? '' : 'none';
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Cancel
+// ═══════════════════════════════════════════════════════════════════════════
+async function cancelTask(taskId) {
+  try {
+    const item = document.querySelector(`.progress-item[data-task="${taskId}"]`);
+    if (item) item.classList.add('cancelling');
+
+    const r = await fetch(`/api/download/${taskId}/cancel`, { method: 'POST' });
+    const d = await r.json();
+    if (d.ok) {
+      toast('Cancelling ' + taskId, 'success');
+    } else {
+      toast(d.message, 'error');
+    }
+  } catch (e) {
+    toast('Cancel failed', 'error');
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// WebSocket Progress
+// ═══════════════════════════════════════════════════════════════════════════
+function connectWebSocket(taskId) {
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const ws = new WebSocket(`${proto}//${location.host}/ws/progress/${taskId}`);
+
+  ws.onmessage = (e) => {
+    const msg = JSON.parse(e.data);
+    const task = STATE.activeTasks[taskId];
+    if (!task) return;
+
+    if (msg.type === 'log') {
+      task.logs.push(msg.data);
+      if (task.logs.length > 100) task.logs.shift();
+      const m = msg.data?.match(/(\d{1,3})\.?\d*%/);
+      if (m) task.progress = parseInt(m[1]);
+    } else if (msg.type === 'status') {
+      task.status = msg.data;
+    } else if (msg.type === 'playlist_progress') {
+      var pp = msg.data;
+      if (pp.total > 0) task.progress = Math.round((pp.current / pp.total) * 100);
+      task.status = pp.current + '/' + pp.total;
+    } else if (msg.type === 'playlist_track_result') {
+      var pr = msg.data;
+      updateTrackStatus(pr.current, pr.ok ? 'ok' : 'fail', pr.file);
+      task.logs.push((pr.ok ? '[OK] ' : '[FAIL] ') + (pr.track ? pr.track.title || pr.track.query : ''));
+      if (task.logs.length > 100) task.logs.shift();
+    } else if (msg.type === 'result') {
+      task.result = msg.data;
+    } else if (msg.type === 'done') {
+      task.status = task.result?.ok ? 'success' : 'error';
+      task.progress = task.result?.ok ? 100 : 0;
+      task.error = task.result?.error || '';
+      // Playlist summary
+      if (task.isPlaylist && task.result) {
+        task.query = 'Playlist: ' + (task.result.playlist_title || '') + ' (' + (task.result.succeeded || 0) + '/' + (task.result.total || 0) + ')';
+      }
+      ws.close();
+      setDownloading(false);
+      refreshFiles();
+    }
+
+    renderProgress();
+  };
+
+  ws.onerror = () => {
+    const task = STATE.activeTasks[taskId];
+    if (task) {
+      task.status = 'error';
+      task.error = 'WebSocket connection lost';
+      renderProgress();
+    }
+    setDownloading(false);
+  };
+
+  ws.onclose = () => {
+    setTimeout(async () => {
+      try {
+        const r = await fetch(`/api/download/${taskId}/result`);
+        const d = await r.json();
+        const task = STATE.activeTasks[taskId];
+        if (task && d.done && d.result) {
+          task.status = d.result.ok ? 'success' : 'error';
+          task.result = d.result;
+          task.error = d.result?.error || '';
+          task.progress = d.result.ok ? 100 : 0;
+          renderProgress();
+          refreshFiles();
+        }
+      } catch (_) {}
+    }, 1000);
+
+    setTimeout(() => {
+      delete STATE.activeTasks[taskId];
+      renderProgress();
+    }, 30000);
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Render Progress
+// ═══════════════════════════════════════════════════════════════════════════
+function renderProgress() {
+  const area = document.getElementById('progressArea');
+  const tasks = Object.entries(STATE.activeTasks);
+
+  if (tasks.length === 0) {
+    area.innerHTML = `<div class="empty-state">
+      <div class="empty-icon">🎶</div>
+      <p>No active downloads<br><span style="font-size:0.78rem;color:var(--text-muted)">Search for a song above to get started</span></p>
+    </div>`;
+    return;
+  }
+
+  area.innerHTML = tasks.map(([id, t]) => {
+    const isDone = t.status === 'success';
+    const isError = t.status === 'error';
+    const isCancelling = t.status === 'cancelling';
+    const isActive = !isDone && !isError && !isCancelling;
+
+    const barClass = isDone ? 'done' : (isError || isCancelling) ? 'error' : 'active';
+    const iconHtml = isDone ? '<span class="done-icon">✓</span>'
+                   : isError ? '<span class="error-icon">✗</span>'
+                   : isCancelling ? '<span class="error-icon">⏹</span>'
+                   : '<span class="spinner"></span>';
+
+    const statusText = isDone ? `✓ Downloaded — ${t.result?.file || 'completed'}`
+                     : isCancelling ? `⏹ Cancelling...`
+                     : isError ? `✗ ${t.error || 'Failed'}`
+                     : '';
+
+    const statusHtml = isActive
+      ? `<span class="music-bars"><span class="bar"></span><span class="bar"></span><span class="bar"></span><span class="bar"></span><span class="bar"></span></span> ${t.status || 'Preparing...'}`
+      : `<span>${statusText}</span>`;
+
+    const statusCls = isDone ? 'success' : (isError || isCancelling) ? 'error' : 'pending';
+
+    const logsHtml = t.logs.slice(-25).map(l => {
+      let cls = '';
+      if (/error|fail|❌|✗/i.test(l)) cls = 'error';
+      else if (/warn|⚠/i.test(l)) cls = 'warn';
+      else if (/download|extract|\[/i.test(l)) cls = 'highlight';
+      return `<div class="task-log-line ${cls}">${escapeHtml(l)}</div>`;
+    }).join('');
+
+    const cancelBtn = isActive
+      ? `<button class="btn btn-sm btn-danger" onclick="cancelTask('${id}')" style="padding:4px 12px;font-size:0.7rem">✕ Cancel</button>`
+      : '';
+
+    return `<div class="progress-item" data-task="${id}">
+      <div class="task-header">
+        <span class="task-query">${iconHtml} ${escapeHtml(t.query)}</span>
+        ${cancelBtn}
+      </div>
+      <div class="progress-bar-outer">
+        <div class="progress-bar-inner ${barClass}" style="width:${t.progress || 0}%"></div>
+      </div>
+      <div class="task-logs">${logsHtml || '<span style="color:var(--text-muted)">Initializing...</span>'}</div>
+      <div class="task-status-footer ${statusCls}">${statusHtml}</div>
+    </div>`;
+  }).join('');
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// File List
+// ═══════════════════════════════════════════════════════════════════════════
+async function refreshFiles() {
+  try {
+    const r = await fetch('/api/downloads');
+    const d = await r.json();
+    STATE.files = d.files || [];
+    renderFiles(d);
+  } catch (_) {
+    if (!STATE.loaded) renderFiles(null);
+  }
+}
+
+function renderFiles(d) {
+  const list = document.getElementById('fileList');
+  const stat = document.getElementById('filesStat');
+  const clearBtn = document.getElementById('clearAllBtn');
+
+  if (d) {
+    const totalFiles = d.total_files || STATE.files.length;
+    const totalSize = d.total_size_mb || 0;
+    if (totalFiles > 0) {
+      stat.style.display = '';
+      stat.textContent = `${totalFiles} files · ${totalSize} MB`;
+      clearBtn.style.display = '';
+    } else {
+      stat.style.display = 'none';
+      clearBtn.style.display = 'none';
+    }
+  }
+
+  if (STATE.files.length === 0) {
+    stat.style.display = 'none';
+    clearBtn.style.display = 'none';
+    list.innerHTML = `<div class="empty-state">
+      <div class="empty-icon">📂</div>
+      <p>Your music library is empty<br><span style="font-size:0.78rem;color:var(--text-muted)">Downloads appear in ~/Downloads/MelodyMine/</span></p>
+    </div>`;
+    return;
+  }
+
+  list.innerHTML = STATE.files.map(f => {
+    const ext = (f.name.split('.').pop() || '').toLowerCase();
+    const iconExt = ['mp3', 'flac', 'm4a'].includes(ext) ? ext : 'default';
+    const icons = { mp3: '🎧', flac: '✨', m4a: '🍎', default: '🎵' };
+    return `<div class="file-item" style="animation: slideIn 0.25s ease-out">
+      <div class="file-icon ${iconExt}">${icons[iconExt]}</div>
+      <div class="file-info">
+        <div class="file-name" title="${escapeHtml(f.name)}">${escapeHtml(f.name)}</div>
+        <div class="file-meta">
+          <span>${f.size_mb} MB</span>
+          <span>${ext.toUpperCase()}</span>
+        </div>
+      </div>
+      <button class="file-del" title="Remove record (keeps file)" data-name="${escapeHtml(f.name)}">×</button>
+    </div>`;
+  }).join('');
+
+  // Attach delete handlers safely (avoids inline onclick with special chars)
+  list.querySelectorAll('.file-del').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const name = btn.getAttribute('data-name');
+      if (name) hideOneFile(name);
+    });
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Open Folder
+// ═══════════════════════════════════════════════════════════════════════════
+async function openFolder() {
+  try {
+    const r = await fetch('/api/open-folder', { method: 'POST' });
+    const d = await r.json();
+    if (d.ok) toast('Opened: ' + d.path, 'success');
+    else toast('Folder: ' + d.path + ' (open failed)', 'error');
+  } catch (e) {
+    toast('Cannot open folder from browser', 'error');
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Clear / Hide Records (files kept on disk)
+// ═══════════════════════════════════════════════════════════════════════════
+async function hideOneFile(name) {
+  try {
+    const r = await fetch(`/api/downloads/records/${encodeURIComponent(name)}`, { method: 'DELETE' });
+    const d = await r.json();
+    if (d.ok) {
+      toast(`Hidden: ${name}`, 'success');
+      refreshFiles();
+    } else {
+      toast('Failed to hide record', 'error');
+    }
+  } catch (e) {
+    toast('Connection error', 'error');
+  }
+}
+
+async function clearAllRecords() {
+  if (!confirm('Clear all download records?\n\nFiles will be kept on disk — only the list is cleared.')) return;
+  try {
+    const r = await fetch('/api/downloads/records', { method: 'DELETE' });
+    const d = await r.json();
+    if (d.ok) {
+      toast(`Cleared ${d.hidden_count} records`, 'success');
+      await refreshFiles();
+    } else {
+      toast('Failed to clear records', 'error');
+    }
+  } catch (e) {
+    toast('Connection error', 'error');
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Settings & Config
+// ═══════════════════════════════════════════════════════════════════════════
+async function loadConfig() {
+  try {
+    // Fetch both env and stored config
+    const [envR, cfgR] = await Promise.all([
+      fetch('/api/config/env'),
+      fetch('/api/config'),
+    ]);
+    const env = await envR.json();
+    const cfg = await cfgR.json();
+
+    // ── Proxy ──
+    const proxy = cfg.proxy || env.all_proxy || env.http_proxy || '';
+    if (proxy) {
+      document.getElementById('proxyUrl').value = proxy;
+      document.getElementById('proxyHint').style.display = '';
+      document.getElementById('proxyHint').textContent = cfg.proxy ? 'Stored in config' : 'From environment';
+    }
+
+    // ── Output dir ──
+    const out = cfg.output_dir || env.output_dir || '';
+    if (out) {
+      document.getElementById('outDir').value = out;
+      document.getElementById('outDirHint').style.display = '';
+      document.getElementById('outDirHint').textContent = cfg.output_dir ? 'Stored in config' : 'From environment';
+    }
+
+    // ── Soulseek Username ──
+    const user = cfg.soulseek_username || '';
+    if (user) {
+      document.getElementById('slskUser').value = user;
+      document.getElementById('slskHint').style.display = '';
+      document.getElementById('slskHint').textContent = 'Stored in config';
+    }
+
+    // ── Soulseek Password ──
+    if (cfg.soulseek_password_set) {
+      document.getElementById('slskPass').placeholder = '•••••••• (saved)';
+      document.getElementById('slskPassHint').style.display = '';
+      document.getElementById('slskPassHint').textContent = 'Password saved — leave blank to keep current';
+    } else {
+      document.getElementById('slskPassHint').style.display = '';
+      document.getElementById('slskPassHint').textContent = 'Leave blank if not using Soulseek';
+    }
+
+    // If env var is set but config doesn't have it, show hint
+    if (env.slsk_user && !user) {
+      document.getElementById('slskHint').style.display = '';
+      document.getElementById('slskHint').textContent = env.slsk_pass_set
+        ? '✓ Credentials set via environment variables (override by saving below)'
+        : '⚠ SLSK_USERNAME set but SLSK_PASSWORD missing in env';
+    }
+  } catch (_) {}
+}
+
+async function saveConfig() {
+  const btn = document.getElementById('saveConfigBtn');
+  const saved = document.getElementById('configSaved');
+  btn.disabled = true;
+  btn.textContent = 'Saving...';
+
+  const body = new URLSearchParams();
+  const user = document.getElementById('slskUser').value.trim();
+  const pass = document.getElementById('slskPass').value;
+  const out = document.getElementById('outDir').value.trim();
+  const proxy = document.getElementById('proxyUrl').value.trim();
+
+  if (user) body.append('soulseek_username', user);
+  if (pass) body.append('soulseek_password', pass);
+  if (out) body.append('output_dir', out);
+  if (proxy) body.append('proxy', proxy);
+
+  try {
+    const r = await fetch('/api/config', { method: 'POST', body });
+    const d = await r.json();
+    if (d.ok) {
+      // Clear password field for security
+      document.getElementById('slskPass').value = '';
+      if (pass) document.getElementById('slskPass').placeholder = '•••••••• (saved)';
+      // Show success indicator
+      saved.style.display = '';
+      saved.style.opacity = '1';
+      setTimeout(() => { saved.style.opacity = '0'; }, 2000);
+      toast('Settings saved', 'success');
+      await loadConfig(); // refresh hints
+    } else {
+      toast('Failed to save', 'error');
+    }
+  } catch (e) {
+    toast('Connection error', 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '💾 Save Settings';
+  }
+}
+
+function updateQuickPill() {
+  const pill = document.getElementById('quickPill');
+  const checked = document.getElementById('quick').checked;
+  pill.classList.toggle('checked', checked);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Utils
+// ═══════════════════════════════════════════════════════════════════════════
+function escapeHtml(s) {
+  return (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function toast(msg, type) {
+  const el = document.createElement('div');
+  el.className = 'toast ' + (type || '');
+  el.innerHTML = type === 'error' ? '⚠ ' + msg : type === 'success' ? '✓ ' + msg : msg;
+  document.body.appendChild(el);
+  setTimeout(() => {
+    el.style.opacity = '0';
+    el.style.transform = 'translateX(-50%) translateY(-8px)';
+    el.style.transition = 'all 0.3s ease';
+    setTimeout(() => el.remove(), 300);
+  }, 3000);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Boot
+// ═══════════════════════════════════════════════════════════════════════════
+init();
+</script>
+
+</body>
+</html>

@@ -33,7 +33,7 @@ import os
 import subprocess
 import sys
 
-from melodymine_common import (
+from melodymine.melodymine_common import (
     DEFAULT_OUTPUT,
     build_spotdl_proxy_args,
     check_module,
@@ -49,7 +49,7 @@ from melodymine_common import (
 )
 
 # Metadata enhancement is shared from the metadata module.
-from metadata import enhance_metadata
+from melodymine.metadata import enhance_metadata
 
 
 # --- Configuration ---

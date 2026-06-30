@@ -49,9 +49,22 @@ NETEASE_RE = re.compile(
     r"https?://(?:music\.163\.com|y\.music\.126\.com)/\S*[?&]ids?=(\d+)"
 )
 
+# NetEase playlist/album URL: music.163.com/playlist?id=xxx or /album?id=xxx
+NETEASE_PLAYLIST_RE = re.compile(
+    r"https?://music\.163\.com/playlist\?id=(\d+)"
+)
+NETEASE_ALBUM_RE = re.compile(
+    r"https?://music\.163\.com/album\?id=(\d+)"
+)
+
 # Direct audio source URLs that yt-dlp can download without a search step.
 YOUTUBE_RE = re.compile(
     r"https?://(?:www\.|m\.)?(?:youtube\.com/watch\?v=|youtu\.be/)[\w\-]{6,}"
+)
+
+# YouTube playlist URL: youtube.com/playlist?list=...
+YOUTUBE_PLAYLIST_RE = re.compile(
+    r"https?://(?:www\.|m\.)?youtube\.com/playlist\?list=[\w\-]+"
 )
 SOUNDCLOUD_RE = re.compile(
     r"https?://(?:www\.|m\.)?soundcloud\.com/[\w\-]+/[\w\-]+"
@@ -616,15 +629,52 @@ def is_netease_url(text):
     return bool(NETEASE_RE.search(text))
 
 
+def is_netease_playlist_url(text):
+    """Check if text contains a NetEase Cloud Music playlist URL."""
+    return bool(NETEASE_PLAYLIST_RE.search(text))
+
+
+def is_netease_album_url(text):
+    """Check if text contains a NetEase Cloud Music album URL."""
+    return bool(NETEASE_ALBUM_RE.search(text))
+
+
 def extract_netease_song_id(text):
     """Extract the numeric song ID from a NetEase URL. Returns str or None."""
     m = NETEASE_RE.search(text)
     return m.group(1) if m else None
 
 
+def extract_netease_playlist_id(text):
+    """Extract the numeric playlist ID from a NetEase playlist URL."""
+    m = NETEASE_PLAYLIST_RE.search(text)
+    return m.group(1) if m else None
+
+
+def extract_netease_album_id(text):
+    """Extract the numeric album ID from a NetEase album URL."""
+    m = NETEASE_ALBUM_RE.search(text)
+    return m.group(1) if m else None
+
+
 def is_youtube_url(text):
     """Check if text is a direct YouTube video URL (not a search query)."""
     return bool(YOUTUBE_RE.search(text))
+
+
+def is_youtube_playlist_url(text):
+    """Check if text is a YouTube playlist URL."""
+    return bool(YOUTUBE_PLAYLIST_RE.search(text))
+
+
+def is_playlist_url(text):
+    """Check if text is any playlist/batch URL (YouTube, NetEase, Spotify)."""
+    return (
+        is_youtube_playlist_url(text)
+        or is_netease_playlist_url(text)
+        or is_netease_album_url(text)
+        or (is_spotify_url(text) and ("/playlist/" in text or "/album/" in text))
+    )
 
 
 def is_soundcloud_url(text):

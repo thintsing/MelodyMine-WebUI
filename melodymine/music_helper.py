@@ -7,12 +7,12 @@ YouTube:  yt-dlp search + download (proxy optional, needed in China)
 spotDL:   Spotify URL pipeline (optional, has known bugs)
 
 Usage:
-    python scripts/music_helper.py check
-    python scripts/music_helper.py search "周杰伦 稻香"
-    python scripts/music_helper.py download "周杰伦 稻香"
-    python scripts/music_helper.py download "The Weeknd Blinding Lights" --proxy socks5://host:port
-    python scripts/music_helper.py download "https://open.spotify.com/track/xxx"
-    python scripts/music_helper.py download "周杰伦 稻香" --dry-run --json
+    python -m melodymine.music_helper check
+    python -m melodymine.music_helper search "周杰伦 稻香"
+    python -m melodymine.music_helper download "周杰伦 稻香"
+    python -m melodymine.music_helper download "The Weeknd Blinding Lights" --proxy socks5://host:port
+    python -m melodymine.music_helper download "https://open.spotify.com/track/xxx"
+    python -m melodymine.music_helper download "周杰伦 稻香" --dry-run --json
 """
 
 import argparse
@@ -24,7 +24,7 @@ import sys
 import time
 from pathlib import Path
 
-from melodymine_common import (
+from melodymine.melodymine_common import (
     BILI_UA,
     DEFAULT_OUTPUT,
     auto_select_platform,
@@ -33,14 +33,20 @@ from melodymine_common import (
     check_version_compat,
     debug_log,
     derive_query_from_filename,
+    extract_netease_album_id,
+    extract_netease_playlist_id,
     extract_netease_song_id,
     find_ffmpeg,
     find_python,
     is_bandcamp_url,
     is_direct_download_url,
+    is_netease_album_url,
+    is_netease_playlist_url,
     is_netease_url,
+    is_playlist_url,
     is_soundcloud_url,
     is_spotify_url,
+    is_youtube_playlist_url,
     is_youtube_url,
     make_subprocess_env,
     pip_install,
@@ -50,11 +56,11 @@ from melodymine_common import (
     set_debug,
 )
 
-import bili_client
-import metadata as _metadata_mod
-import netease_client
-import soulseek_client
-import ytmusic_client
+from melodymine import bili_client
+from melodymine import metadata as _metadata_mod
+from melodymine import netease_client
+from melodymine import soulseek_client
+from melodymine import ytmusic_client
 
 # ─── Dependencies ────────────────────────────────────────────────────────
 
@@ -645,7 +651,7 @@ def cmd_setup():
     # Step 3: Find ffmpeg
     print("[3/4] Locating ffmpeg...")
     # Force re-detection (clear cache)
-    import melodymine_common as _mc
+    from melodymine import melodymine_common as _mc
     _mc._CACHED_FFMPEG = None
     ff = find_ffmpeg(py)
     if ff:
@@ -666,7 +672,7 @@ def cmd_setup():
     print("[4/4] Setup complete!")
     print()
     print("  You can now download music:")
-    print(f'    python scripts/music_helper.py download "周杰伦 稻香"')
+    print(f'    python -m melodymine.music_helper download "周杰伦 稻香"')
     print()
     print("  Platform availability:")
     has_yt = check_module(py, "yt_dlp")
@@ -698,7 +704,7 @@ def cmd_check():
         print(f"  [OK]   yt-dlp:        v{ytdlp_ver}")
     else:
         print("  [FAIL] No Python with yt-dlp found")
-        print("         Run: python scripts/music_helper.py setup")
+        print("         Run: python -m melodymine.music_helper setup")
         return False
 
     if ff:
@@ -826,7 +832,7 @@ def cmd_search(query, platform="auto", limit=5, proxy=None):
     py, _, _ = ensure_deps()
     if not py:
         print("ERROR: No Python with yt-dlp found. Run 'setup' first:")
-        print("  python scripts/music_helper.py setup")
+        print("  python -m melodymine.music_helper setup")
         sys.exit(1)
 
     if platform == "auto":
@@ -931,7 +937,7 @@ def cmd_meta(filepath, query=None, embed_thumbnail=True, json_output=False):
     py, _, _ = ensure_deps()
     if not py:
         print("ERROR: No Python with yt-dlp found. Run 'setup' first:")
-        print("  python scripts/music_helper.py setup")
+        print("  python -m melodymine.music_helper setup")
         sys.exit(1)
 
     if not os.path.isfile(filepath):
@@ -1155,7 +1161,7 @@ def cmd_download(
     py, _, _ = ensure_deps()
     if not py:
         print("ERROR: No Python with yt-dlp found. Run 'setup' first:")
-        print("  python scripts/music_helper.py setup")
+        print("  python -m melodymine.music_helper setup")
         sys.exit(1)
     debug_log(f"python={py}")
 
@@ -1815,6 +1821,263 @@ Examples:
             _emit_json(result)
     else:
         parser.print_help()
+
+
+# ── Playlist / Batch Download ──────────────────────────────────────────────
+
+def resolve_playlist(url):
+    """Resolve a playlist/album URL into a track list.
+
+    Supported: YouTube playlist, NetEase playlist/album, Spotify playlist/album.
+
+    Returns dict: {platform, type, title, creator, track_count, tracks: [{query, title, artist}]}
+    Returns None on failure.
+    """
+    # ── YouTube playlist ──
+    if is_youtube_playlist_url(url):
+        print("[Playlist] Resolving YouTube playlist...")
+        py, _, _ = ensure_deps()
+        if not py:
+            print("ERROR: No Python with yt-dlp found.")
+            return None
+        try:
+            result = subprocess.run(
+                [py, "-m", "yt_dlp", "--flat-playlist", "--dump-json",
+                 "--no-warnings", "--playlist-end", "200", url],
+                capture_output=True, text=True, timeout=60,
+                env=make_subprocess_env(),
+            )
+        except (subprocess.TimeoutExpired, OSError) as e:
+            print(f"ERROR: Failed to resolve YouTube playlist: {e}")
+            return None
+
+        tracks = []
+        title = ""
+        creator = ""
+        for line in result.stdout.strip().split("\n"):
+            if not line:
+                continue
+            try:
+                info = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if not title:
+                title = info.get("playlist_title", "") or info.get("title", "")
+            if not creator:
+                creator = info.get("playlist_uploader", "") or info.get("uploader", "")
+            track_url = info.get("webpage_url") or info.get("url") or f"https://youtube.com/watch?v={info.get('id', '')}"
+            track_title = info.get("title", info.get("id", ""))
+            if track_title and "/watch?v=" not in track_url:
+                track_url = track_title  # fallback to search
+            tracks.append({
+                "query": track_url,
+                "title": track_title,
+                "artist": info.get("uploader", ""),
+            })
+
+        if not tracks:
+            print("ERROR: No tracks found in YouTube playlist.")
+            return None
+        print(f"[Playlist] {title} — {len(tracks)} tracks")
+        return {
+            "platform": "youtube",
+            "type": "playlist",
+            "id": url,
+            "url": url,
+            "title": title or "YouTube Playlist",
+            "creator": creator,
+            "description": "",
+            "cover": "",
+            "track_count": len(tracks),
+            "play_count": 0,
+            "tracks": tracks,
+        }
+
+    # ── NetEase playlist ──
+    if is_netease_playlist_url(url):
+        pid = extract_netease_playlist_id(url)
+        if not pid:
+            return None
+        print(f"[Playlist] Resolving NetEase playlist {pid}...")
+        try:
+            info = netease_client.playlist_detail(pid)
+        except Exception as e:
+            print(f"ERROR: NetEase playlist exception: {e}")
+            import traceback; traceback.print_exc()
+            return None
+        if not info:
+            print("ERROR: Failed to resolve NetEase playlist.")
+            return None
+        # Convert track IDs to search queries
+        for t in info["tracks"]:
+            t["query"] = f"{t['artist']} {t['title']}".strip() if t.get("artist") else t["title"]
+        info["url"] = url
+        print(f"[Playlist] {info['title']} — {len(info['tracks'])} tracks")
+        return info
+
+    # ── NetEase album ──
+    if is_netease_album_url(url):
+        aid = extract_netease_album_id(url)
+        if not aid:
+            return None
+        print(f"[Playlist] Resolving NetEase album {aid}...")
+        info = netease_client.album_detail(aid)
+        if not info:
+            print("ERROR: Failed to resolve NetEase album.")
+            return None
+        for t in info["tracks"]:
+            t["query"] = f"{t['artist']} {t['title']}".strip() if t.get("artist") else t["title"]
+        info["url"] = url
+        print(f"[Playlist] {info['title']} — {len(info['tracks'])} tracks")
+        return info
+
+    # ── Spotify playlist/album ──
+    if is_spotify_url(url) and ("/playlist/" in url or "/album/" in url):
+        print("[Playlist] Resolving Spotify playlist via spotDL...")
+        py, _, _ = ensure_deps()
+        if not py:
+            return None
+        try:
+            result = subprocess.run(
+                [py, "-m", "spotdl", "save", url, "--save-file", "-"],
+                capture_output=True, text=True, timeout=60,
+                env=make_subprocess_env(),
+            )
+        except (subprocess.TimeoutExpired, OSError) as e:
+            print(f"ERROR: Failed to resolve Spotify playlist: {e}")
+            return None
+        tracks = []
+        for line in result.stdout.strip().split("\n"):
+            if not line.strip():
+                continue
+            track_info = {}
+            # spotdl save outputs: title || artist  (tab-separated)
+            parts = line.split("\t")
+            if len(parts) >= 2:
+                track_info["title"] = parts[0].strip()
+                track_info["artist"] = parts[1].strip()
+            else:
+                track_info["title"] = line.strip()
+                track_info["artist"] = ""
+            track_info["query"] = f"{track_info['artist']} {track_info['title']}".strip()
+            tracks.append(track_info)
+
+        if not tracks:
+            print("ERROR: No tracks found in Spotify playlist/album.")
+            return None
+        print(f"[Playlist] Spotify — {len(tracks)} tracks")
+        return {
+            "platform": "spotify",
+            "type": "playlist" if "/playlist/" in url else "album",
+            "id": url,
+            "url": url,
+            "title": "Spotify " + ("Playlist" if "/playlist/" in url else "Album"),
+            "creator": "",
+            "description": "",
+            "cover": "",
+            "track_count": len(tracks),
+            "play_count": 0,
+            "tracks": tracks,
+        }
+
+    print(f"ERROR: Unsupported playlist URL: {url}")
+    return None
+
+
+def cmd_playlist_download(
+    url, fmt="mp3", output=None, proxy=None, bitrate=None,
+    embed_thumbnail=True, no_metadata=False, cookies=None,
+    slsk_user=None, slsk_pass=None, quick=False,
+    start_from=0, max_tracks=0,
+):
+    """Download all tracks from a playlist/album URL.
+
+    Args:
+        url: Playlist/album URL
+        start_from: 0-based index of first track to download
+        max_tracks: Max tracks to download (0 = all)
+        Other args: passed through to cmd_download() for each track
+
+    Prints progress markers like:
+        [Playlist 3/25] Artist - Title
+        [Playlist OK] Artist - Title  →  file.mp3
+        [Playlist FAIL] Artist - Title  →  reason
+        [Playlist DONE] 20/25 succeeded
+    """
+    info = resolve_playlist(url)
+    if not info:
+        print("[Playlist FAIL] Could not resolve playlist")
+        return {"ok": False, "error": "Could not resolve playlist"}
+
+    tracks = info["tracks"]
+    if start_from:
+        tracks = tracks[start_from:]
+    if max_tracks and max_tracks > 0:
+        tracks = tracks[:max_tracks]
+
+    total = len(tracks)
+    print(f"[Playlist] Downloading {total} tracks from \"{info['title']}\"")
+    print(f"[Playlist] Format: {fmt}  Bitrate: {bitrate or 'auto'}")
+
+    success_count = 0
+    results = []
+
+    if not output:
+        output = DEFAULT_OUTPUT
+    os.makedirs(output, exist_ok=True)
+
+    for i, track in enumerate(tracks):
+        num = i + 1
+        query = track.get("query", track.get("title", ""))
+        if not query:
+            print(f"[Playlist {num}/{total}] SKIP: empty query")
+            continue
+
+        print(f"[Playlist {num}/{total}] {query}")
+
+        try:
+            result = cmd_download(
+                query=query,
+                platform="auto",
+                fmt=fmt,
+                output=output,
+                proxy=proxy,
+                bitrate=bitrate,
+                index=1,
+                embed_thumbnail=embed_thumbnail,
+                no_metadata=no_metadata,
+                cookies=cookies,
+                json_output=False,
+                slsk_user=slsk_user,
+                slsk_pass=slsk_pass,
+                quick=quick,
+            )
+        except Exception as e:
+            result = {"ok": False, "error": str(e)}
+
+        results.append(result)
+
+        if isinstance(result, dict) and result.get("ok"):
+            success_count += 1
+            filename = result.get("file", "")
+            if filename:
+                print(f"[Playlist OK] {query}")
+            else:
+                print(f"[Playlist OK] {query}  →  downloaded")
+        else:
+            err = result.get("error", "unknown") if isinstance(result, dict) else str(result)
+            print(f"[Playlist FAIL] {query}  →  {err}")
+
+    print(f"[Playlist DONE] {success_count}/{total} succeeded")
+    return {
+        "ok": True,
+        "playlist_title": info["title"],
+        "platform": info["platform"],
+        "total": total,
+        "succeeded": success_count,
+        "failed": total - success_count,
+        "results": results,
+    }
 
 
 if __name__ == "__main__":

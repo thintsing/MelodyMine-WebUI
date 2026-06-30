@@ -17,7 +17,7 @@ import sys
 import time
 
 # Proxy auto-detection is now unified in melodymine_common.
-from melodymine_common import detect_proxy as _detect_proxy, debug_log
+from melodymine.melodymine_common import detect_proxy as _detect_proxy, debug_log
 
 
 def _build_proxied_socket(dest_host, dest_port, proxy_url, timeout=30):

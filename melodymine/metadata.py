@@ -20,15 +20,15 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from melodymine_common import (
+from melodymine.melodymine_common import (
     BILI_UA,
     find_ffmpeg,
     sanitize_filename,
 )
 
-import cover_client
-import mbrainz_client
-import netease_client
+from melodymine import cover_client
+from melodymine import mbrainz_client
+from melodymine import netease_client
 
 # ─── Audio file extensions (canonical source — shared by all modules) ────
 
