@@ -17,6 +17,8 @@ Importing this module keeps both helpers in sync and avoids divergent
 venv paths or duplicated dependency-install logic.
 """
 
+from __future__ import annotations
+
 import glob
 import os
 import re
@@ -24,6 +26,7 @@ import shutil
 import subprocess
 import sys
 import time
+from typing import Any
 
 # ─── Platform / Constants ────────────────────────────────────────────────
 
@@ -94,7 +97,7 @@ DEP_COMPAT = {
 }
 
 
-def check_version_compat(module_name, installed_version):
+def check_version_compat(module_name: str, installed_version: str | None) -> tuple[str, str]:
     """Check an installed version against the compatibility matrix.
 
     Returns (status, message):
@@ -138,7 +141,7 @@ def check_version_compat(module_name, installed_version):
     return "ok", ""
 
 
-def _get_default_output():
+def _get_default_output() -> str:
     """Pick a sensible default output directory that exists on this platform."""
     for candidate in [
         os.path.join(HOME, "Music", "MelodyMine"),     # Windows / macOS
@@ -162,7 +165,7 @@ _PYTHON_CACHE = {}
 _CACHED_FFMPEG = None
 
 
-def _collect_python_candidates():
+def _collect_python_candidates() -> list[str]:
     """Build an exhaustive list of Python interpreters to try."""
     candidates = []
 
@@ -286,7 +289,7 @@ def _collect_python_candidates():
     return unique
 
 
-def check_module(python, module_name, timeout=15):
+def check_module(python: str, module_name: str, timeout: int = 15) -> str | None:
     """Check if a Python has a module installed. Returns version string or None."""
     # yt_dlp stores version in yt_dlp.version.__version__, not top-level
     version_expr = {
@@ -306,7 +309,7 @@ def check_module(python, module_name, timeout=15):
     return None
 
 
-def pip_install(python, packages, timeout=180):
+def pip_install(python: str, packages: list[str], timeout: int = 180) -> bool:
     """Install pip packages. Handles PEP 668 (externally-managed-environment).
 
     Strategy: regular install -> --user -> report failure (caller may create venv).
@@ -348,7 +351,7 @@ def pip_install(python, packages, timeout=180):
     return False
 
 
-def _create_venv(base_python, install_packages, verify_module="yt_dlp", timeout=120):
+def _create_venv(base_python: str, install_packages: list[str], verify_module: str = "yt_dlp", timeout: int = 120) -> tuple[str | None, str | None]:
     """Create the unified virtual environment and install all deps.
 
     Returns (venv_python, verify_module_version) or (None, None).
@@ -382,7 +385,7 @@ def _create_venv(base_python, install_packages, verify_module="yt_dlp", timeout=
     return None, None
 
 
-def detect_python_with(required_module):
+def detect_python_with(required_module: str) -> tuple[str | None, str | None]:
     """Detect a Python that has ``required_module`` installed, WITHOUT auto-installing.
 
     Returns (path, version) or (None, None). Use for read-only checks (e.g.
@@ -397,7 +400,7 @@ def detect_python_with(required_module):
     return None, None
 
 
-def find_python(required_module, install_packages):
+def find_python(required_module: str, install_packages: list[str]) -> tuple[str | None, str | None]:
     """Find a Python interpreter with ``required_module`` installed.
 
     Auto-installs ``install_packages`` if not present. Creates the unified
@@ -461,7 +464,7 @@ def find_python(required_module, install_packages):
     return None, None
 
 
-def find_ffmpeg(python=None):
+def find_ffmpeg(python: str | None = None) -> str | None:
     """Find ffmpeg executable.
 
     Strategy: system PATH -> imageio-ffmpeg (bundled static ffmpeg binary).
@@ -519,7 +522,7 @@ def find_ffmpeg(python=None):
 
 # ─── Proxy helpers ───────────────────────────────────────────────────────
 
-def is_socks_proxy(proxy_url):
+def is_socks_proxy(proxy_url: str) -> bool:
     """Check if proxy URL is a SOCKS proxy."""
     return bool(proxy_url) and proxy_url.startswith(
         ("socks5://", "socks5h://", "socks4://")
@@ -535,7 +538,7 @@ _PROXY_PORTS = [7897, 7890, 1080, 2080, 8118]
 _LOCALHOST_SOCKS5 = "socks5://127.0.0.1:{port}"
 
 
-def detect_proxy():
+def detect_proxy() -> str:
     """Auto-detect a running local proxy.
 
     Resolution order:
@@ -578,7 +581,7 @@ def detect_proxy():
     return ""
 
 
-def build_spotdl_proxy_args(proxy):
+def build_spotdl_proxy_args(proxy: str) -> list[str]:
     """Return spotdl CLI args for a proxy URL.
 
     spotDL only accepts HTTP/HTTPS in --proxy. For SOCKS5 proxies we must
@@ -595,7 +598,7 @@ def build_spotdl_proxy_args(proxy):
     return ["--proxy", proxy]
 
 
-def proxy_to_env(proxy_url):
+def proxy_to_env(proxy_url: str) -> dict[str, str]:
     """Convert proxy URL to environment variables for Python requests."""
     if is_socks_proxy(proxy_url):
         return {"ALL_PROXY": proxy_url}
@@ -604,70 +607,70 @@ def proxy_to_env(proxy_url):
 
 # ─── Language / URL detection ────────────────────────────────────────────
 
-def is_chinese(text):
+def is_chinese(text: str) -> bool:
     for ch in text:
         if "\u4e00" <= ch <= "\u9fff":
             return True
     return False
 
 
-def auto_select_platform(query):
+def auto_select_platform(query: str) -> str:
     """Pick the default platform based on query language."""
     return "bilibili" if is_chinese(query) else "youtube"
 
 
-def needs_proxy(platform):
+def needs_proxy(platform: str) -> bool:
     return platform in PROXY_PLATFORMS
 
 
-def is_spotify_url(text):
+def is_spotify_url(text: str) -> bool:
     return bool(SPOTIFY_RE.search(text))
 
 
-def is_netease_url(text):
+def is_netease_url(text: str) -> bool:
     """Check if text contains a NetEase Cloud Music song URL."""
     return bool(NETEASE_RE.search(text))
 
 
-def is_netease_playlist_url(text):
+def is_netease_playlist_url(text: str) -> bool:
     """Check if text contains a NetEase Cloud Music playlist URL."""
     return bool(NETEASE_PLAYLIST_RE.search(text))
 
 
-def is_netease_album_url(text):
+def is_netease_album_url(text: str) -> bool:
     """Check if text contains a NetEase Cloud Music album URL."""
     return bool(NETEASE_ALBUM_RE.search(text))
 
 
-def extract_netease_song_id(text):
+def extract_netease_song_id(text: str) -> str | None:
     """Extract the numeric song ID from a NetEase URL. Returns str or None."""
     m = NETEASE_RE.search(text)
     return m.group(1) if m else None
 
 
-def extract_netease_playlist_id(text):
+def extract_netease_playlist_id(text: str) -> str | None:
     """Extract the numeric playlist ID from a NetEase playlist URL."""
     m = NETEASE_PLAYLIST_RE.search(text)
     return m.group(1) if m else None
 
 
-def extract_netease_album_id(text):
+def extract_netease_album_id(text: str) -> str | None:
     """Extract the numeric album ID from a NetEase album URL."""
     m = NETEASE_ALBUM_RE.search(text)
     return m.group(1) if m else None
 
 
-def is_youtube_url(text):
+def is_youtube_url(text: str) -> bool:
     """Check if text is a direct YouTube video URL (not a search query)."""
     return bool(YOUTUBE_RE.search(text))
 
 
-def is_youtube_playlist_url(text):
+def is_youtube_playlist_url(text: str) -> bool:
     """Check if text is a YouTube playlist URL."""
     return bool(YOUTUBE_PLAYLIST_RE.search(text))
 
 
-def is_playlist_url(text):
+def is_playlist_url(text: str) -> bool:
     """Check if text is any playlist/batch URL (YouTube, NetEase, Spotify)."""
     return (
         is_youtube_playlist_url(text)
@@ -677,17 +680,17 @@ def is_playlist_url(text):
     )
 
 
-def is_soundcloud_url(text):
+def is_soundcloud_url(text: str) -> bool:
     """Check if text is a SoundCloud track URL."""
     return bool(SOUNDCLOUD_RE.search(text))
 
 
-def is_bandcamp_url(text):
+def is_bandcamp_url(text: str) -> bool:
     """Check if text is a Bandcamp track URL."""
     return bool(BANDCAMP_RE.search(text))
 
 
-def is_direct_download_url(text):
+def is_direct_download_url(text: str) -> bool:
     """Check if text is a URL that yt-dlp can download directly (no search needed).
 
     Covers YouTube, SoundCloud, and Bandcamp. Spotify/NetEase need special handling.
@@ -697,14 +700,14 @@ def is_direct_download_url(text):
 
 # ─── Misc ────────────────────────────────────────────────────────────────
 
-def sanitize_filename(name):
+def sanitize_filename(name: str) -> str:
     """Sanitize a string for use as a filename (cross-platform safe)."""
     name = re.sub(r'[<>:"/\\|?*]', "", name)
     name = re.sub(r"\s+", " ", name).strip()
     return name
 
 
-def derive_query_from_filename(filepath):
+def derive_query_from_filename(filepath: str) -> str:
     """Derive a metadata search query from an audio file's name.
 
     Strips the extension, replaces dash separators (ASCII and CJK variants)
@@ -723,7 +726,7 @@ def derive_query_from_filename(filepath):
 # ─── Subprocess helpers ───────────────────────────────────────────────────
 
 
-def make_subprocess_env():
+def make_subprocess_env() -> dict[str, str]:
     """Return an ``os.environ`` copy with ``PYTHONIOENCODING=utf-8`` set.
 
     Shared by every ``subprocess.run`` / ``Popen`` call in the project so
@@ -734,7 +737,7 @@ def make_subprocess_env():
     return env
 
 
-def run_python_script(python, script, args=(), timeout=30):
+def run_python_script(python: str, script: str, args: tuple = (), timeout: int = 30) -> subprocess.CompletedProcess:
     """Run a Python inline script (``-c``) with consistent encoding and env.
 
     Args:
@@ -765,7 +768,7 @@ DEBUG_LOG_PATH = os.path.join(DEBUG_LOG_DIR, "last_run.log")
 _DEBUG_ENABLED = False
 
 
-def set_debug(enabled):
+def set_debug(enabled: bool) -> None:
     """Toggle debug logging. When enabled, write a session log to last_run.log."""
     global _DEBUG_ENABLED
     _DEBUG_ENABLED = enabled
@@ -775,7 +778,7 @@ def set_debug(enabled):
             f.write(f"=== MelodyMine debug session — {time.strftime('%Y-%m-%d %H:%M:%S')} ===\n")
 
 
-def debug_log(message):
+def debug_log(message: str) -> None:
     """Append a line to the debug log if debug mode is on."""
     if not _DEBUG_ENABLED:
         return
@@ -786,11 +789,11 @@ def debug_log(message):
         pass  # never let logging break the actual operation
 
 
-def is_debug():
+def is_debug() -> bool:
     return _DEBUG_ENABLED
 
 
-def run_streaming(cmd, env=None):
+def run_streaming(cmd: list[str], env: dict[str, str] | None = None) -> int:
     """Run a subprocess, streaming combined stdout+stderr to print in real time.
 
     Returns the exit code. In debug mode, also tee output to last_run.log.

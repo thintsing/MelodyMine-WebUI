@@ -23,17 +23,12 @@ API:
   POST   /api/open-folder               — open download dir in file manager
 """
 
-import json
 import logging
 import os
 import subprocess
 import sys
 import threading
-import time
-import uuid
-import queue
 from datetime import datetime
-from io import StringIO
 from pathlib import Path
 
 from fastapi import FastAPI, Form, HTTPException, WebSocket, WebSocketDisconnect
@@ -42,75 +37,19 @@ from fastapi.responses import FileResponse, HTMLResponse
 import uvicorn
 
 from melodymine import music_helper
+from melodymine.config_manager import (
+    DOWNLOADS_DIR, RECORDS_FILE,
+    _load_config, _save_config,
+    _load_hidden_set, _save_hidden_set,
+    _record_lock, get_soulseek_creds,
+)
+from melodymine.progress import ProgressManager
 
-# ── Constants ──────────────────────────────────────────────────────────────
+# ── Audio extensions recognised by the file list ─────────────────────
 
-DOWNLOADS_DIR = Path.home() / "Downloads" / "MelodyMine"
-RECORDS_FILE = DOWNLOADS_DIR / ".hidden_records.json"
-CONFIG_FILE = Path.home() / ".melodymine" / "config.json"
+_AUDIO_EXTS = frozenset({".mp3", ".flac", ".m4a", ".opus", ".ogg", ".wav", ".webm"})
 
-# ── Config Helpers ──────────────────────────────────────────────────────────
-
-_config_lock = threading.Lock()
-
-DEFAULT_CONFIG = {
-    "soulseek_username": "",
-    "soulseek_password": "",
-    "output_dir": "",
-    "proxy": "",
-}
-
-
-def _load_config() -> dict:
-    """Load persistent config from ~/.melodymine/config.json."""
-    if not CONFIG_FILE.exists():
-        return dict(DEFAULT_CONFIG)
-    try:
-        data = json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
-        cfg = dict(DEFAULT_CONFIG)
-        cfg.update({k: v for k, v in data.items() if k in DEFAULT_CONFIG})
-        return cfg
-    except (json.JSONDecodeError, OSError):
-        return dict(DEFAULT_CONFIG)
-
-
-def _save_config(updates: dict):
-    """Merge updates into config and persist."""
-    CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
-    cfg = _load_config()
-    cfg.update({k: v for k, v in updates.items() if k in DEFAULT_CONFIG})
-    CONFIG_FILE.write_text(
-        json.dumps(cfg, indent=2, ensure_ascii=False),
-        encoding="utf-8",
-    )
-    return cfg
-
-
-# ── Records Helper ──────────────────────────────────────────────────────────
-
-_record_lock = threading.Lock()
-
-
-def _load_hidden_set() -> set[str]:
-    """Load the set of filenames hidden (removed) from the list."""
-    if not RECORDS_FILE.exists():
-        return set()
-    try:
-        data = json.loads(RECORDS_FILE.read_text(encoding="utf-8"))
-        return set(data.get("hidden", []))
-    except (json.JSONDecodeError, OSError):
-        return set()
-
-
-def _save_hidden_set(hidden: set[str]):
-    """Persist the hidden-filename set to disk."""
-    DOWNLOADS_DIR.mkdir(parents=True, exist_ok=True)
-    RECORDS_FILE.write_text(
-        json.dumps({"hidden": sorted(hidden)}, indent=2, ensure_ascii=False),
-        encoding="utf-8",
-    )
-
-# ── App setup ─────────────────────────────────────────────────────────────
+# ── App setup ─────────────────────────────────────────────────────────
 
 _HERE = Path(__file__).resolve().parent
 
@@ -125,151 +64,52 @@ static_dir = _HERE / "static"
 static_dir.mkdir(exist_ok=True)
 app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
-# ── Progress Manager ──────────────────────────────────────────────────────
-
-class ProgressManager:
-    """Thread-safe progress queues + cancel support for active downloads."""
-
-    def __init__(self):
-        self._queues: dict[str, queue.Queue] = {}
-        self._results: dict[str, dict] = {}
-        self._cancelled: set[str] = set()
-        self._threads: dict[str, threading.Thread] = {}
-        self._lock = threading.Lock()
-
-    def create_task(self) -> str:
-        task_id = uuid.uuid4().hex[:12]
-        with self._lock:
-            self._queues[task_id] = queue.Queue()
-        return task_id
-
-    def register_thread(self, task_id: str, thread: threading.Thread):
-        with self._lock:
-            self._threads[task_id] = thread
-
-    def cancel(self, task_id: str) -> bool:
-        with self._lock:
-            if task_id not in self._queues:
-                return False
-            self._cancelled.add(task_id)
-        self.emit(task_id, "status", "cancelling")
-        return True
-
-    def is_cancelled(self, task_id: str) -> bool:
-        with self._lock:
-            return task_id in self._cancelled
-
-    def emit(self, task_id: str, type_: str, data):
-        """Push a progress message to the task's queue."""
-        msg = {"type": type_, "data": data, "ts": time.time()}
-        q = self._queues.get(task_id)
-        if q:
-            q.put(msg)
-
-    def set_result(self, task_id: str, result: dict):
-        with self._lock:
-            self._results[task_id] = result
-        self.emit(task_id, "result", result)
-        self.emit(task_id, "done", None)
-
-    def get_result(self, task_id: str) -> dict | None:
-        return self._results.get(task_id)
-
-    def iter_progress(self, task_id: str, timeout: float = 300):
-        """Generator yielding progress messages until DONE or timeout."""
-        q = self._queues.get(task_id)
-        if not q:
-            return
-        deadline = time.time() + timeout
-        while time.time() < deadline:
-            try:
-                msg = q.get(timeout=0.5)
-                yield msg
-                if msg["type"] == "done":
-                    return
-            except queue.Empty:
-                yield {"type": "ping", "data": None, "ts": time.time()}
-
-    def cleanup(self, task_id: str):
-        with self._lock:
-            self._queues.pop(task_id, None)
-            self._results.pop(task_id, None)
-            self._cancelled.discard(task_id)
-            self._threads.pop(task_id, None)
-
-
 pm = ProgressManager()
 
-# ── Output Capture (thread-safe) ───────────────────────────────────────────
 
-def capture_print(task_id: str):
-    """Context manager that redirects stdout in current thread for progress capture.
+# ── Download Runner ───────────────────────────────────────────────────
 
-    Uses a thread-local approach — concurrent downloads don't interfere
-    because each thread gets its own stdout wrapper.
-    """
-
-    class Tee(StringIO):
-        def write(self, s):
-            super().write(s)
-            if s.strip():
-                sys.__stdout__.write(s)
-                pm.emit(task_id, "log", s.rstrip("\n"))
-
-        def flush(self):
-            super().flush()
-            sys.__stdout__.flush()
-
-    old = sys.stdout
-    sys.stdout = Tee()
-    try:
-        yield
-    finally:
-        sys.stdout = old
+def _build_download_params(form_data: dict, output: str = "") -> dict:
+    """Reduce copy-paste between single and playlist download params."""
+    return {
+        "query": form_data.get("query", "").strip(),
+        "platform": form_data.get("platform", "auto"),
+        "format": form_data.get("format", "mp3"),
+        "output": output or str(DOWNLOADS_DIR),
+        "proxy": form_data.get("proxy", ""),
+        "bitrate": form_data.get("bitrate", "320k"),
+        "index": form_data.get("index", 1),
+        "embed_thumbnail": form_data.get("embed_thumbnail", True),
+        "no_metadata": form_data.get("no_metadata", False),
+        "cookies": form_data.get("cookies", ""),
+        "quick": form_data.get("quick", False),
+    }
 
 
-# ── Download Runner ────────────────────────────────────────────────────────
-
-def run_download_in_thread(task_id: str, params: dict):
+def run_download_in_thread(task_id: str, params: dict) -> None:
     """Execute cmd_download() in a background thread, capturing progress."""
     pm.emit(task_id, "status", "starting")
 
     try:
-        query = params["query"]
-        platform = params.get("platform", "auto")
-        fmt = params.get("format", "mp3")
-        output = params.get("output", str(DOWNLOADS_DIR))
-        proxy = params.get("proxy", "")
-        bitrate = params.get("bitrate", "320k")
-        index = params.get("index", 1)
-        embed_thumbnail = params.get("embed_thumbnail", True)
-        no_metadata = params.get("no_metadata", False)
-        cookies = params.get("cookies", "")
-        quick = params.get("quick", False)
+        slsk_user, slsk_pass = get_soulseek_creds()
 
-        # ── Soulseek credentials: stored config → env vars → None ──────
-        cfg = _load_config()
-        slsk_user = cfg.get("soulseek_username") or os.getenv("SLSK_USERNAME") or None
-        slsk_pass = cfg.get("soulseek_password") or os.getenv("SLSK_PASSWORD") or None
-
-        # Check cancellation before starting
         if pm.is_cancelled(task_id):
             pm.set_result(task_id, {"ok": False, "error": "Cancelled by user"})
             return
 
-        with capture_print(task_id):
+        with pm.capture_print(task_id):
             result = music_helper.cmd_download(
-                query=query,
-                platform=platform or "auto",
-                fmt=fmt,
-                output=output,
-                proxy=proxy or None,
-                bitrate=bitrate or None,
-                index=index,
-                embed_thumbnail=embed_thumbnail,
-                no_metadata=no_metadata,
-                cookies=cookies or None,
-                quick=quick,
+                query=params["query"],
+                platform=params.get("platform", "auto"),
+                fmt=params.get("format", "mp3"),
+                output=params.get("output", str(DOWNLOADS_DIR)),
+                proxy=params.get("proxy") or None,
+                bitrate=params.get("bitrate") or None,
+                index=params.get("index", 1),
+                embed_thumbnail=params.get("embed_thumbnail", True),
+                no_metadata=params.get("no_metadata", False),
+                cookies=params.get("cookies") or None,
+                quick=params.get("quick", False),
                 json_output=True,
                 slsk_user=slsk_user,
                 slsk_pass=slsk_pass,
@@ -284,7 +124,7 @@ def run_download_in_thread(task_id: str, params: dict):
         pm.set_result(task_id, {"ok": False, "error": str(e)})
 
 
-# ── API Routes ─────────────────────────────────────────────────────────────
+# ── API Routes ────────────────────────────────────────────────────────
 
 @app.get("/", response_class=HTMLResponse)
 async def index():
@@ -310,8 +150,6 @@ async def health():
             "os": sys.platform,
             "cwd": str(_HERE),
         }
-
-        # Quick module checks
         try:
             status["yt_dlp"] = check_module(py, "yt-dlp")
         except Exception:
@@ -342,19 +180,12 @@ async def start_download(
 
     task_id = pm.create_task()
 
-    params = {
-        "query": query.strip(),
-        "format": fmt,
-        "output": output or str(DOWNLOADS_DIR),
-        "proxy": proxy,
-        "bitrate": bitrate,
-        "index": index,
-        "embed_thumbnail": embed_thumbnail,
-        "no_metadata": no_metadata,
-        "cookies": cookies,
-        "quick": quick,
-        "platform": platform,
-    }
+    params = _build_download_params({
+        "query": query, "format": fmt, "output": output,
+        "proxy": proxy, "bitrate": bitrate, "index": index,
+        "embed_thumbnail": embed_thumbnail, "no_metadata": no_metadata,
+        "cookies": cookies, "quick": quick, "platform": platform,
+    }, output)
 
     t = threading.Thread(target=run_download_in_thread, args=(task_id, params), daemon=True)
     pm.register_thread(task_id, t)
@@ -371,10 +202,10 @@ async def cancel_download(task_id: str):
     return {"ok": False, "message": "Task not found or already completed"}
 
 
-# ── Playlist API ────────────────────────────────────────────────────────────
+# ── Playlist API ──────────────────────────────────────────────────────
 
-def run_playlist_download_in_thread(task_id: str, params: dict):
-    """Execute cmd_playlist_download() in a background thread, capturing progress."""
+def run_playlist_download_in_thread(task_id: str, params: dict) -> None:
+    """Execute cmd_playlist_download() in a background thread."""
     pm.emit(task_id, "status", "resolving")
 
     try:
@@ -390,11 +221,9 @@ def run_playlist_download_in_thread(task_id: str, params: dict):
         start_from = params.get("start_from", 0)
         max_tracks = params.get("max_tracks", 0)
 
-        cfg = _load_config()
-        slsk_user = cfg.get("soulseek_username") or os.getenv("SLSK_USERNAME") or None
-        slsk_pass = cfg.get("soulseek_password") or os.getenv("SLSK_PASSWORD") or None
+        slsk_user, slsk_pass = get_soulseek_creds()
 
-        # ── Step 1: Resolve playlist ──
+        # Step 1: Resolve playlist
         pm.emit(task_id, "status", "resolving")
         playlist_info = music_helper.resolve_playlist(url)
         if playlist_info is None:
@@ -406,7 +235,7 @@ def run_playlist_download_in_thread(task_id: str, params: dict):
             pm.set_result(task_id, {"ok": False, "error": "Cancelled by user"})
             return
 
-        # ── Step 2: Download tracks one by one ──
+        # Step 2: Download tracks one by one
         tracks = playlist_info.get("tracks", [])
         if start_from:
             tracks = tracks[start_from:]
@@ -414,7 +243,9 @@ def run_playlist_download_in_thread(task_id: str, params: dict):
             tracks = tracks[:max_tracks]
 
         total = len(tracks)
-        pm.emit(task_id, "playlist_progress", {"current": 0, "total": total, "status": "downloading"})
+        pm.emit(task_id, "playlist_progress", {
+            "current": 0, "total": total, "status": "downloading",
+        })
 
         success_count = 0
 
@@ -430,22 +261,17 @@ def run_playlist_download_in_thread(task_id: str, params: dict):
                 "track": track, "status": "downloading",
             })
 
-            with capture_print(task_id):
+            with pm.capture_print(task_id):
                 try:
                     result = music_helper.cmd_download(
-                        query=query,
-                        platform="auto",
-                        fmt=fmt,
-                        output=output,
-                        proxy=proxy or None,
-                        bitrate=bitrate or None,
-                        index=1,
+                        query=query, platform="auto", fmt=fmt,
+                        output=output, proxy=proxy or None,
+                        bitrate=bitrate or None, index=1,
                         embed_thumbnail=embed_thumbnail,
                         no_metadata=no_metadata,
                         cookies=cookies or None,
                         json_output=False,
-                        slsk_user=slsk_user,
-                        slsk_pass=slsk_pass,
+                        slsk_user=slsk_user, slsk_pass=slsk_pass,
                         quick=quick,
                     )
                 except Exception as e:
@@ -518,14 +344,11 @@ async def start_playlist_download(
         "url": url.strip(),
         "format": fmt,
         "output": output or str(DOWNLOADS_DIR),
-        "proxy": proxy,
-        "bitrate": bitrate,
+        "proxy": proxy, "bitrate": bitrate,
         "embed_thumbnail": embed_thumbnail,
-        "no_metadata": no_metadata,
-        "cookies": cookies,
+        "no_metadata": no_metadata, "cookies": cookies,
         "quick": quick,
-        "start_from": start_from,
-        "max_tracks": max_tracks,
+        "start_from": start_from, "max_tracks": max_tracks,
     }
 
     t = threading.Thread(target=run_playlist_download_in_thread, args=(task_id, params), daemon=True)
@@ -569,7 +392,7 @@ async def list_downloads():
     total_size = 0
     if DOWNLOADS_DIR.exists():
         for f in sorted(DOWNLOADS_DIR.iterdir(), key=lambda x: x.stat().st_mtime, reverse=True):
-            if f.suffix.lower() in (".mp3", ".flac", ".m4a", ".opus", ".ogg", ".wav", ".webm"):
+            if f.suffix.lower() in _AUDIO_EXTS:
                 if f.name in hidden:
                     continue
                 st = f.stat()
@@ -589,13 +412,12 @@ async def list_downloads():
 
 @app.delete("/api/downloads/records")
 async def clear_all_records():
-    """Clear all download records (hides everything from the list — files are kept)."""
+    """Clear all download records (hides everything from list — files kept)."""
     with _record_lock:
         hidden = _load_hidden_set()
-        # Add all current audio files to hidden set
         if DOWNLOADS_DIR.exists():
             for f in DOWNLOADS_DIR.iterdir():
-                if f.suffix.lower() in (".mp3", ".flac", ".m4a", ".opus", ".ogg", ".wav", ".webm"):
+                if f.suffix.lower() in _AUDIO_EXTS:
                     hidden.add(f.name)
         _save_hidden_set(hidden)
     return {"ok": True, "hidden_count": len(hidden)}
@@ -603,7 +425,7 @@ async def clear_all_records():
 
 @app.delete("/api/downloads/records/{name:path}")
 async def hide_one_record(name: str):
-    """Remove a single file from the list (file is kept on disk)."""
+    """Remove a single file from the list (file kept on disk)."""
     with _record_lock:
         hidden = _load_hidden_set()
         hidden.add(name)
@@ -616,7 +438,6 @@ async def serve_file(name: str):
     """Serve a downloaded file for preview or download."""
     file_path = (DOWNLOADS_DIR / name).resolve()
 
-    # Security: ensure the resolved path is still under downloads_dir
     if not str(file_path).startswith(str(DOWNLOADS_DIR.resolve())):
         raise HTTPException(403, "Access denied")
 
@@ -685,7 +506,6 @@ async def env_config():
         "all_proxy": os.getenv("ALL_PROXY", "") or cfg.get("proxy", ""),
         "http_proxy": os.getenv("HTTP_PROXY", ""),
         "output_dir": os.getenv("MELODYMINE_OUTPUT", "") or cfg.get("output_dir", ""),
-        # Also return stored config values for UI pre-fill
         "stored_user": cfg.get("soulseek_username", ""),
         "stored_pass_set": bool(cfg.get("soulseek_password", "")),
         "stored_output": cfg.get("output_dir", ""),
@@ -693,7 +513,7 @@ async def env_config():
     }
 
 
-# ── Startup ────────────────────────────────────────────────────────────────
+# ── Startup ───────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
     print(" MelodyMine Web UI — starting...")

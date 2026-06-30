@@ -754,15 +754,15 @@ def cmd_check():
     print("    - YouTube   (English songs, proxy optional — needed in China)")
     print("    - Spotify URL  (optional, via spotDL)")
 
-    # ── Soulseek credentials check ──
-    slsk_user = os.environ.get("SLSK_USERNAME", "")
-    slsk_pass = os.environ.get("SLSK_PASSWORD", "")
+    # ── Soulseek credentials check (env vars → stored config) ──
+    from melodymine.config_manager import get_soulseek_creds
+    slsk_user, slsk_pass = get_soulseek_creds()
     if slsk_user and slsk_pass:
         print(f"\n  Soulseek P2P: [OK] configured (user: {slsk_user})")
         print(f"    Downloads prefer Soulseek first for best quality, then fall back to Bilibili/YouTube.")
     else:
         if not slsk_user and not slsk_pass:
-            tip = "Set SLSK_USERNAME and SLSK_PASSWORD env vars"
+            tip = "Set SLSK_USERNAME and SLSK_PASSWORD env vars, or configure in WebUI"
         elif not slsk_user:
             tip = "Set SLSK_USERNAME env var (SLSK_PASSWORD is set)"
         else:
@@ -1132,11 +1132,23 @@ _PLATFORM_HANDLERS = {
 
 
 def cmd_download(
-    query, platform="auto", fmt="flac", output=None,
-    proxy=None, bitrate=None, index=1, embed_thumbnail=True,
-    no_metadata=False, cookies=None, dry_run=False, json_output=False,
-    debug=False, slsk_user=None, slsk_pass=None, quick=False,
-):
+    query: str,
+    platform: str = "auto",
+    fmt: str = "flac",
+    output: str | None = None,
+    proxy: str | None = None,
+    bitrate: str | None = None,
+    index: int = 1,
+    embed_thumbnail: bool = True,
+    no_metadata: bool = False,
+    cookies: str | None = None,
+    dry_run: bool = False,
+    json_output: bool = False,
+    debug: bool = False,
+    slsk_user: str | None = None,
+    slsk_pass: str | None = None,
+    quick: bool = False,
+) -> dict:
     """Download a song with automatic platform selection and fallback.
 
     When ``quick`` is True, Soulseek P2P is skipped entirely — the

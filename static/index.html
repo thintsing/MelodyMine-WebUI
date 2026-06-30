@@ -1537,79 +1537,100 @@ async function cancelTask(taskId) {
 // ═══════════════════════════════════════════════════════════════════════════
 function connectWebSocket(taskId) {
   const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-  const ws = new WebSocket(`${proto}//${location.host}/ws/progress/${taskId}`);
+  let retries = 0;
+  const MAX_RETRIES = 3;
 
-  ws.onmessage = (e) => {
-    const msg = JSON.parse(e.data);
-    const task = STATE.activeTasks[taskId];
-    if (!task) return;
+  function _connect() {
+    const ws = new WebSocket(`${proto}//${location.host}/ws/progress/${taskId}`);
 
-    if (msg.type === 'log') {
-      task.logs.push(msg.data);
-      if (task.logs.length > 100) task.logs.shift();
-      const m = msg.data?.match(/(\d{1,3})\.?\d*%/);
-      if (m) task.progress = parseInt(m[1]);
-    } else if (msg.type === 'status') {
-      task.status = msg.data;
-    } else if (msg.type === 'playlist_progress') {
-      var pp = msg.data;
-      if (pp.total > 0) task.progress = Math.round((pp.current / pp.total) * 100);
-      task.status = pp.current + '/' + pp.total;
-    } else if (msg.type === 'playlist_track_result') {
-      var pr = msg.data;
-      updateTrackStatus(pr.current, pr.ok ? 'ok' : 'fail', pr.file);
-      task.logs.push((pr.ok ? '[OK] ' : '[FAIL] ') + (pr.track ? pr.track.title || pr.track.query : ''));
-      if (task.logs.length > 100) task.logs.shift();
-    } else if (msg.type === 'result') {
-      task.result = msg.data;
-    } else if (msg.type === 'done') {
-      task.status = task.result?.ok ? 'success' : 'error';
-      task.progress = task.result?.ok ? 100 : 0;
-      task.error = task.result?.error || '';
-      // Playlist summary
-      if (task.isPlaylist && task.result) {
-        task.query = 'Playlist: ' + (task.result.playlist_title || '') + ' (' + (task.result.succeeded || 0) + '/' + (task.result.total || 0) + ')';
-      }
-      ws.close();
-      setDownloading(false);
-      refreshFiles();
-    }
+    ws.onmessage = (e) => {
+      retries = 0; // reset on successful message
+      const msg = JSON.parse(e.data);
+      const task = STATE.activeTasks[taskId];
+      if (!task) return;
 
-    renderProgress();
-  };
-
-  ws.onerror = () => {
-    const task = STATE.activeTasks[taskId];
-    if (task) {
-      task.status = 'error';
-      task.error = 'WebSocket connection lost';
-      renderProgress();
-    }
-    setDownloading(false);
-  };
-
-  ws.onclose = () => {
-    setTimeout(async () => {
-      try {
-        const r = await fetch(`/api/download/${taskId}/result`);
-        const d = await r.json();
-        const task = STATE.activeTasks[taskId];
-        if (task && d.done && d.result) {
-          task.status = d.result.ok ? 'success' : 'error';
-          task.result = d.result;
-          task.error = d.result?.error || '';
-          task.progress = d.result.ok ? 100 : 0;
-          renderProgress();
-          refreshFiles();
+      if (msg.type === 'log') {
+        task.logs.push(msg.data);
+        if (task.logs.length > 100) task.logs.shift();
+        const m = msg.data?.match(/(\d{1,3})\.?\d*%/);
+        if (m) task.progress = parseInt(m[1]);
+      } else if (msg.type === 'status') {
+        task.status = msg.data;
+      } else if (msg.type === 'playlist_progress') {
+        var pp = msg.data;
+        if (pp.total > 0) task.progress = Math.round((pp.current / pp.total) * 100);
+        task.status = pp.current + '/' + pp.total;
+      } else if (msg.type === 'playlist_track_result') {
+        var pr = msg.data;
+        updateTrackStatus(pr.current, pr.ok ? 'ok' : 'fail', pr.file);
+        task.logs.push((pr.ok ? '[OK] ' : '[FAIL] ') + (pr.track ? pr.track.title || pr.track.query : ''));
+        if (task.logs.length > 100) task.logs.shift();
+      } else if (msg.type === 'result') {
+        task.result = msg.data;
+      } else if (msg.type === 'done') {
+        task.status = task.result?.ok ? 'success' : 'error';
+        task.progress = task.result?.ok ? 100 : 0;
+        task.error = task.result?.error || '';
+        if (task.isPlaylist && task.result) {
+          task.query = 'Playlist: ' + (task.result.playlist_title || '') + ' (' + (task.result.succeeded || 0) + '/' + (task.result.total || 0) + ')';
         }
-      } catch (_) {}
-    }, 1000);
+        ws.close();
+        setDownloading(false);
+        refreshFiles();
+      } else if (msg.type === 'playlist_info') {
+        // playlist already resolved on server side
+      }
 
-    setTimeout(() => {
-      delete STATE.activeTasks[taskId];
       renderProgress();
-    }, 30000);
-  };
+    };
+
+    ws.onerror = () => { /* handled by onclose */ };
+
+    ws.onclose = () => {
+      const task = STATE.activeTasks[taskId];
+      if (!task) return;
+
+      // If task is already done/error, just poll for result
+      if (task.status === 'success' || task.status === 'error') {
+        _pollResult(taskId);
+        setTimeout(() => { delete STATE.activeTasks[taskId]; renderProgress(); }, 30000);
+        return;
+      }
+
+      // Try to reconnect
+      if (retries < MAX_RETRIES) {
+        retries++;
+        task.status = 'reconnecting (' + retries + '/' + MAX_RETRIES + ')';
+        renderProgress();
+        setTimeout(_connect, 1500 * retries);
+      } else {
+        task.status = 'error';
+        task.error = 'WebSocket connection lost after retries';
+        setDownloading(false);
+        _pollResult(taskId);
+        setTimeout(() => { delete STATE.activeTasks[taskId]; renderProgress(); }, 30000);
+      }
+    };
+  }
+
+  _connect();
+}
+
+function _pollResult(taskId) {
+  fetch(`/api/download/${taskId}/result`)
+    .then(r => r.json())
+    .then(d => {
+      const task = STATE.activeTasks[taskId];
+      if (task && d.done && d.result) {
+        task.status = d.result.ok ? 'success' : 'error';
+        task.result = d.result;
+        task.error = d.result?.error || '';
+        task.progress = d.result.ok ? 100 : 0;
+        renderProgress();
+        refreshFiles();
+      }
+    })
+    .catch(() => {});
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
