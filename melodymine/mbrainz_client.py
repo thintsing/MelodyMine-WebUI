@@ -8,7 +8,7 @@ import urllib.request
 import urllib.error
 import urllib.parse
 
-UA = "MelodyMine/1.0 (music-downloader; +https://github.com/thintsing/MelodyMine)"
+UA = "MelodyMine/1.0 (music-downloader; +https://github.com/thintsing/MelodyMine-WebUI)"
 
 
 def lookup(query, limit=5, timeout=15):
