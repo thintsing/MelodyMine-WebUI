@@ -1,5 +1,7 @@
 # MelodyMine WebUI
 
+[English](./README.md) | [简体中文](./README.zh-CN.md)
+
 基于 Web 的音乐搜索与下载工具，支持 Bilibili、YouTube、Spotify、网易云音乐、Soulseek 多平台音源。
 
 ## 功能特性

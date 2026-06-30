@@ -1,5 +1,7 @@
 # MelodyMine WebUI
 
+[English](./README.md) | [简体中文](./README.zh-CN.md)
+
 A web-based music search & download tool supporting Bilibili, YouTube, Spotify, NetEase Cloud Music, and Soulseek.
 
 ## Features
