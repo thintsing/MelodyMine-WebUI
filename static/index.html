@@ -155,7 +155,6 @@
 [data-theme="light"] .btn--ghost:hover { background: rgba(139,92,246,0.04); }
 [data-theme="light"] .btn--primary { box-shadow: 0 4px 18px rgba(139,92,246,0.2); }
 [data-theme="light"] .btn--primary:hover { box-shadow: 0 6px 24px rgba(139,92,246,0.3); }
-[data-theme="light"] .select-sm { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%235b5772' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E"); }
 [data-theme="light"] .setting-row__hint { color: #8e8a9f; }
 [data-theme="light"] .progress-bar { background: rgba(0,0,0,0.04); }
 [data-theme="light"] .progress-item { background: rgba(0,0,0,0.01); }
@@ -588,25 +587,6 @@ body::before {
   flex-wrap: wrap;
   align-items: center;
 }
-.select-sm {
-  background: var(--bg-input);
-  border: 1px solid var(--glass-border);
-  border-radius: var(--r-sm);
-  padding: 8px 32px 8px 12px;
-  color: var(--text);
-  font-size: var(--fs-xs);
-  font-family: var(--font-sans);
-  outline: none;
-  cursor: pointer;
-  transition: all var(--dur-fast) var(--ease-out);
-  appearance: none;
-  -webkit-appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239c97ad' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 10px center;
-}
-.select-sm:hover { border-color: var(--glass-border-hover); }
-.select-sm:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
 
 .toggle-pill {
   display: inline-flex;
@@ -1138,7 +1118,7 @@ body::before {
   #app { padding: 20px 12px 40px; }
   .card { padding: 16px; border-radius: var(--r-md); }
   .search-group { flex-direction: column; }
-  .options-row > * { flex: 1; }
+
   .setting-row { flex-direction: column; align-items: flex-start; gap: 6px; }
   .setting-row__label { min-width: auto; }
   .setting-row__input { width: 100%; }
@@ -1230,26 +1210,6 @@ body::before {
           </div>
         </div>
         <div class="options-row" style="margin-top:10px">
-          <select class="select-sm" id="platform">
-            <option value="auto">Auto detect</option>
-            <option value="bilibili">Bilibili</option>
-            <option value="youtube">YouTube</option>
-            <option value="soulseek">Soulseek P2P</option>
-          </select>
-          <select class="select-sm" id="format">
-            <option value="mp3">MP3</option>
-            <option value="flac">FLAC</option>
-            <option value="m4a">M4A</option>
-            <option value="opus">Opus</option>
-            <option value="auto">Auto (best)</option>
-          </select>
-          <select class="select-sm" id="bitrate">
-            <option value="320k">320k</option>
-            <option value="256k">256k</option>
-            <option value="192k">192k</option>
-            <option value="128k">128k</option>
-            <option value="0">Best available</option>
-          </select>
           <label class="toggle-pill" id="quickPill">
             <input type="checkbox" id="quick" onchange="updateQuickPill()"> Skip P2P
           </label>
@@ -1598,8 +1558,8 @@ async function downloadPlaylistAll() {
   renderPlaylist();
   const body = new URLSearchParams({
     url: pl.url || pl.id || '',
-    fmt: $('#format').value,
-    bitrate: $('#bitrate').value,
+    fmt: 'auto',
+    bitrate: '0',
     quick: $('#plQuick').checked ? '1' : '0',
     embed_thumbnail: '1',
     no_metadata: '0',
@@ -1623,9 +1583,9 @@ async function startDownload(query) {
   setBtnLoading(true);
   const body = new URLSearchParams({
     query,
-    fmt: $('#format').value,
-    bitrate: $('#bitrate').value,
-    platform: $('#platform').value,
+    fmt: 'auto',
+    bitrate: '0',
+    platform: 'auto',
     quick: $('#quick').checked ? '1' : '0',
     index: '0',
     embed_thumbnail: '1',
